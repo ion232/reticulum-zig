@@ -32,12 +32,14 @@ pub const Fernet = struct {
     }
 
     pub fn encrypt(self: Fernet, plaintext: []const u8, buffer: []u8) Token {
-        const ciphertext = pkcs7.pad(Aes.block_length, plaintext, buffer);
-
         var iv: [Aes.block_length]u8 = undefined;
         hw.rand.bytes(&iv);
 
-        Aes.encrypt(ciphertext, plaintext, self.encryption_key, iv);
+        var other_buffer: [1000]u8 = undefined;
+        Aes.encrypt(other_buffer[0..plaintext.len], plaintext, self.encryption_key, iv);
+        const ciphertext = pkcs7.pad(Aes.block_length, other_buffer[0..plaintext.len], buffer);
+
+        std.debug.print("CIPHER: {s} \n", .{ciphertext});
 
         var hmac: [Hmac.mac_length]u8 = undefined;
         var hmac_gen = Hmac.init(&self.signing_key);
@@ -59,6 +61,8 @@ pub const Fernet = struct {
 
         std.debug.assert(buffer.len >= token.ciphertext.len);
         Aes.decrypt(buffer, token.ciphertext, self.encryption_key, token.iv);
+
+        std.debug.print("Buffer: {s}\n", .{buffer});
 
         return try pkcs7.unpad(Aes.block_length, buffer);
     }
@@ -98,93 +102,15 @@ test "init" {
 
 test "Fernet - encrypt and decrypt" {
     const fernet = Fernet.random();
-    const plaintext = "Reticulum in Zig!";
+    const plaintext = "reticulum-zig!!!";
     var ciphertext: [2 * Aes.block_length]u8 = undefined;
 
     const token = fernet.encrypt(plaintext, &ciphertext);
     try t.expect(fernet.verify(&token));
-    try t.expect(!std.mem.eql(u8, plaintext, ciphertext[0..plaintext.len]));
+    std.debug.print("plaintext: {s} ciphertext: {s}\n", .{ plaintext[0..], ciphertext[0..plaintext.len] });
+    try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
 
     var buffer: [ciphertext.len]u8 = undefined;
     const computed_plaintext = try fernet.decrypt(&token, &buffer);
     try t.expectEqualSlices(u8, plaintext, computed_plaintext);
 }
-
-// test "Fernet - tampered token detection" {
-//     const allocator = std.testing.allocator;
-//     const f = Fernet.random();
-
-//     // Create test data
-//     var plaintext = std.ArrayList(u8).init(allocator);
-//     defer plaintext.deinit();
-//     try plaintext.appendSlice("Secret Message");
-
-//     const ciphertext = try allocator.alloc(u8, 32);
-//     defer allocator.free(ciphertext);
-
-//     // Create token and encrypt
-//     var token = Token.init(undefined, ciphertext, undefined);
-//     try f.encrypt(&token, &plaintext);
-
-//     // Tamper with ciphertext
-//     token.ciphertext[0] ^= 1;
-
-//     // Verify token detects tampering
-//     try std.testing.expect(!token.verify());
-
-//     // Attempt to decrypt should fail
-//     var decrypted = std.ArrayList(u8).init(allocator);
-//     defer decrypted.deinit();
-
-//     try std.testing.expectError(error.InvalidToken, f.decrypt(&decrypted, &token));
-// }
-
-// test "Fernet - different key pairs" {
-//     const allocator = std.testing.allocator;
-//     const f1 = Fernet.random();
-//     const f2 = Fernet.random();
-
-//     // Create test data
-//     var plaintext = std.ArrayList(u8).init(allocator);
-//     defer plaintext.deinit();
-//     try plaintext.appendSlice("Test Message");
-
-//     const ciphertext = try allocator.alloc(u8, 32);
-//     defer allocator.free(ciphertext);
-
-//     // Encrypt with first key
-//     var token = Token.init(undefined, ciphertext, undefined);
-//     try f1.encrypt(&token, &plaintext);
-
-//     // Attempt to decrypt with different key
-//     var decrypted = std.ArrayList(u8).init(allocator);
-//     defer decrypted.deinit();
-
-//     try std.testing.expectError(error.InvalidToken, f2.decrypt(&decrypted, &token));
-// }
-
-// test "Fernet - large data" {
-//     const allocator = std.testing.allocator;
-//     const f = Fernet.random();
-
-//     // Create large test data
-//     var plaintext = std.ArrayList(u8).init(allocator);
-//     defer plaintext.deinit();
-
-//     for (0..1000) |i| {
-//         try plaintext.append(@intCast(i % 256));
-//     }
-
-//     const ciphertext = try allocator.alloc(u8, 1024);
-//     defer allocator.free(ciphertext);
-
-//     // Encrypt and decrypt
-//     var token = Token.init(undefined, ciphertext, undefined);
-//     try f.encrypt(&token, &plaintext);
-
-//     var decrypted = std.ArrayList(u8).init(allocator);
-//     defer decrypted.deinit();
-
-//     try f.decrypt(&decrypted, &token);
-//     try std.testing.expectEqualSlices(u8, plaintext.items, decrypted.items);
-// }
