@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const hw = @import("hw/hw.zig");
 const pkcs7 = @import("pkcs7.zig");
@@ -6,27 +7,10 @@ const Aes = @import("aes.zig").Aes;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
-/// ion232: Normally this token has a version and timestamp, but these are removed in Reticulum.
 pub const Token = struct {
     iv: [Aes.block_length]u8,
-    ciphertext: []u8,
+    ciphertext: []const u8,
     hmac: [Hmac.mac_length]u8,
-
-    pub fn init(iv: [Aes.block_length]u8, ciphertext: []u8, hmac: [Hmac.mac_length]u8) Token {
-        return .{
-            .iv = iv,
-            .ciphertext = ciphertext,
-            .hmac = hmac,
-        };
-    }
-
-    pub fn verify(self: *Token) bool {
-        const digest: [Hmac.mac_length]u8 = undefined;
-        const token_slice: []u8 = std.mem.asBytes(self);
-        const token_data_len = token_slice.len - @sizeOf(Token.hmac);
-        Hmac.create(digest, token_slice[0..token_data_len], self.signing_key);
-        return self.hmac == digest;
-    }
 };
 
 pub const Fernet = struct {
@@ -37,8 +21,9 @@ pub const Fernet = struct {
         var signing_bytes: [Aes.block_length]u8 = undefined;
         var encryption_bytes: [Aes.block_length]u8 = undefined;
 
-        std.mem.writeInt(u128, &signing_bytes, signing_key, std.builtin.Endian.big);
-        std.mem.writeInt(u128, &encryption_bytes, encryption_key, std.builtin.Endian.big);
+        const endian = builtin.cpu.arch.endian();
+        std.mem.writeInt(u128, &signing_bytes, signing_key, endian);
+        std.mem.writeInt(u128, &encryption_bytes, encryption_key, endian);
 
         return .{
             .signing_key = signing_bytes,
@@ -53,28 +38,40 @@ pub const Fernet = struct {
         };
     }
 
-    pub fn encrypt(self: Fernet, token: *Token, plaintext: *std.ArrayList(u8)) !void {
+    pub fn encrypt(self: Fernet, plaintext: []const u8, out: []u8) !Token {
         try pkcs7.pad(plaintext, Aes.block_length);
-        std.debug.assert(token.ciphertext.len >= plaintext.items.len);
 
-        hw.rand.bytes(&token.iv);
+        const iv: [Aes.block_length]u8 = undefined;
+        hw.rand.bytes(&iv);
+        const ciphertext = std.ArrayList(u8).init(plaintext.allocator);
         Aes.encrypt(token.ciphertext, plaintext.items, self.encryption_key, token.iv);
 
         const token_slice: []u8 = std.mem.asBytes(token);
-        const token_data_len = token_slice.len - @sizeOf(Token.hmac);
-        Hmac.create(token.hmac_digest, token_slice[0..token_data_len], self.signing_key);
+        const token_data_len = token_slice.len - Hmac.mac_length;
+        Hmac.create(&token.hmac, token_slice[0..token_data_len], self.signing_key);
     }
 
-    pub fn decrypt(self: Fernet, plaintext: *std.ArrayList(u8), token: *Token) !void {
+    pub fn decrypt(self: Fernet, token: *Token, ally: std.mem.Allocator) !std.ArrayList(u8) {
         if (!token.verify()) {
             return;
         }
+
+        const plaintext = std.ArrayList(u8).init(ally);
 
         try plaintext.ensureTotalCapacity(token.ciphertext.len);
         try plaintext.expandToCapacity();
 
         Aes.decrypt(plaintext.items, token.ciphertext, self.encryption_key, token.iv);
         try pkcs7.unpad(plaintext, Aes.block_length);
+    }
+
+    pub fn verify(self: Fernet, token: *Token) bool {
+        const computed_hmac: [Hmac.mac_length]u8 = undefined;
+        var hmac_gen = Hmac.init(self.signing_key);
+        hmac_gen.update(token.iv);
+        hmac_gen.update(token.ciphertext);
+        hmac_gen.final(&computed_hmac);
+        return self.hmac == computed_hmac;
     }
 };
 

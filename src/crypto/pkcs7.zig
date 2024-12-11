@@ -3,35 +3,44 @@ const std = @import("std");
 pub const UnpadError = error{
     InvalidLength,
     InvalidPadValue,
-    InvalidSum,
 };
 
-pub fn pad(data: *std.ArrayList(u8), comptime block_length: u8) !void {
+pub fn pad(data: []u8, out: []u8, comptime block_length: u8) []u8 {
     const r: u8 = @intCast(data.items.len % block_length);
     const n = block_length - r;
-    try data.appendNTimes(n, n);
+    std.debug.assert(out.len >= data.len);
+
+    @memcpy(out, data);
+
+    for (0..n) |i| {
+        out[data.len + i] = n;
+    }
+
+    return out[0 .. data.len + n];
 }
 
-pub fn unpad(data: *std.ArrayList(u8), comptime block_length: u8) !void {
-    if (data.items.len == 0 or (data.items.len % block_length) != 0) {
+pub fn unpad(data: []u8, out: []u8, comptime block_length: u8) ![]u8 {
+    if (data.len == 0 or (data.len % block_length) != 0) {
         return UnpadError.InvalidLength;
     }
 
-    const n = data.getLast();
-    if (n == 0 or n >= block_length or n > data.items.len) {
+    const n = data[data.len - 1];
+    if (n == 0 or n >= block_length or n > data.len) {
         return UnpadError.InvalidPadValue;
     }
 
-    var sum: usize = 0;
     for (0..n) |i| {
-        sum += data.items[data.items.len - i - 1];
+        if (n != data[data.len - i - 1]) {
+            return UnpadError.InvalidPadValue;
+        }
     }
 
-    if (sum != (n * n)) {
-        return UnpadError.InvalidSum;
-    }
+    std.debug.assert(out.len >= data.len - n);
 
-    data.shrinkAndFree(data.items.len - n);
+    // Does this need to be copied?
+    @memcpy(out, data[0 .. data.len - n]);
+
+    return out[0 .. data.len - n];
 }
 
 test "pad - empty" {
