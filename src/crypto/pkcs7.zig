@@ -5,39 +5,39 @@ pub const UnpadError = error{
     InvalidPadValue,
 };
 
-// Wrap this in a comptime struct.
+pub fn Pkcs7(comptime block_length: u8) type {
+    return struct {
+        pub fn pad(data: []const u8, buffer: []u8) []u8 {
+            const r: u8 = @intCast(data.len % block_length);
+            const n = block_length - r;
+            std.debug.assert(buffer.len >= data.len);
 
-pub fn pad(comptime block_length: u8, data: []const u8, out: []u8) []u8 {
-    const r: u8 = @intCast(data.len % block_length);
-    const n = block_length - r;
-    std.debug.assert(out.len >= data.len);
+            for (0..n) |i| {
+                buffer[data.len + i] = n;
+            }
 
-    @memcpy(out[0..data.len], data[0..data.len]);
-
-    for (0..n) |i| {
-        out[data.len + i] = n;
-    }
-
-    return out[0 .. data.len + n];
-}
-
-pub fn unpad(comptime block_length: u8, data: []const u8) ![]const u8 {
-    if (data.len == 0 or (data.len % block_length) != 0) {
-        return UnpadError.InvalidLength;
-    }
-
-    const n = data[data.len - 1];
-    if (n == 0 or n >= block_length or n > data.len) {
-        return UnpadError.InvalidPadValue;
-    }
-
-    for (0..n) |i| {
-        if (n != data[data.len - i - 1]) {
-            return UnpadError.InvalidPadValue;
+            return out[0 .. data.len + n];
         }
-    }
 
-    return data[0 .. data.len - n];
+        pub fn unpad(data: []const u8) ![]const u8 {
+            if (data.len == 0 or (data.len % block_length) != 0) {
+                return UnpadError.InvalidLength;
+            }
+
+            const n = data[data.len - 1];
+            if (n == 0 or n >= block_length or n > data.len) {
+                return UnpadError.InvalidPadValue;
+            }
+
+            for (0..n) |i| {
+                if (n != data[data.len - i - 1]) {
+                    return UnpadError.InvalidPadValue;
+                }
+            }
+
+            return data[0 .. data.len - n];
+        }
+    };
 }
 
 const t = std.testing;

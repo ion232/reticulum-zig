@@ -35,11 +35,8 @@ pub const Fernet = struct {
         var iv: [Aes.block_length]u8 = undefined;
         hw.rand.bytes(&iv);
 
-        var other_buffer: [1000]u8 = undefined;
-        Aes.encrypt(other_buffer[0..plaintext.len], plaintext, self.encryption_key, iv);
-        const ciphertext = pkcs7.pad(Aes.block_length, other_buffer[0..plaintext.len], buffer);
-
-        std.debug.print("CIPHER: {s} \n", .{ciphertext});
+        Aes.encrypt(buffer[0..plaintext.len], plaintext, self.encryption_key, iv);
+        const ciphertext = Aes.block_length, buffer[0..plaintext.len], buffer;
 
         var hmac: [Hmac.mac_length]u8 = undefined;
         var hmac_gen = Hmac.init(&self.signing_key);
