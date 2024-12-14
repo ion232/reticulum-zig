@@ -1,10 +1,9 @@
 const builtin = @import("builtin");
 const std = @import("std");
-
 const hw = @import("hw/hw.zig");
-const pkcs7 = @import("pkcs7.zig");
+const aes = @import("aes.zig");
 
-const Aes = @import("aes.zig").Aes;
+const Aes = aes.Aes;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 
 pub const Fernet = struct {
@@ -35,8 +34,7 @@ pub const Fernet = struct {
         var iv: [Aes.block_length]u8 = undefined;
         hw.rand.bytes(&iv);
 
-        Aes.encrypt(buffer[0..plaintext.len], plaintext, self.encryption_key, iv);
-        const ciphertext = Aes.block_length, buffer[0..plaintext.len], buffer;
+        const ciphertext = Aes.encrypt(buffer, plaintext, self.encryption_key, iv);
 
         var hmac: [Hmac.mac_length]u8 = undefined;
         var hmac_gen = Hmac.init(&self.signing_key);
@@ -56,12 +54,7 @@ pub const Fernet = struct {
             return FernetError.VerificationFailed;
         }
 
-        std.debug.assert(buffer.len >= token.ciphertext.len);
-        Aes.decrypt(buffer, token.ciphertext, self.encryption_key, token.iv);
-
-        std.debug.print("Buffer: {s}\n", .{buffer});
-
-        return try pkcs7.unpad(Aes.block_length, buffer);
+        return try Aes.decrypt(buffer, token.ciphertext, self.encryption_key, token.iv);
     }
 
     pub fn verify(self: Fernet, token: *const Token) bool {
@@ -99,12 +92,25 @@ test "init" {
 
 test "Fernet - encrypt and decrypt" {
     const fernet = Fernet.random();
-    const plaintext = "reticulum-zig!!!";
+    const plaintext = "reticulum-zig!";
     var ciphertext: [2 * Aes.block_length]u8 = undefined;
 
     const token = fernet.encrypt(plaintext, &ciphertext);
     try t.expect(fernet.verify(&token));
-    std.debug.print("plaintext: {s} ciphertext: {s}\n", .{ plaintext[0..], ciphertext[0..plaintext.len] });
+    try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
+
+    var buffer: [ciphertext.len]u8 = undefined;
+    const computed_plaintext = try fernet.decrypt(&token, &buffer);
+    try t.expectEqualSlices(u8, plaintext, computed_plaintext);
+}
+
+test "Fernet - encrypt and decrypt of block length" {
+    const fernet = Fernet.random();
+    const plaintext = "reticulum-zig :)";
+    var ciphertext: [2 * Aes.block_length]u8 = undefined;
+
+    const token = fernet.encrypt(plaintext, &ciphertext);
+    try t.expect(fernet.verify(&token));
     try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
 
     var buffer: [ciphertext.len]u8 = undefined;

@@ -84,8 +84,8 @@ test "Encrypt and decrypt empty" {
     try t.expectEqualSlices(u8, plaintext, initial_plaintext);
 }
 
-test "Encrypt and decrypt on block boundary" {
-    const initial_plaintext = "this is blk len!";
+test "Encrypt and decrypt of block length" {
+    const initial_plaintext = "this is 16 chars";
     var ciphertext_buffer: [2 * Aes.block_length]u8 = undefined;
 
     const ciphertext = Aes.encrypt(ciphertext_buffer[0..], initial_plaintext[0..], test_key, test_iv);
@@ -93,6 +93,21 @@ test "Encrypt and decrypt on block boundary" {
     try t.expect(!std.mem.eql(u8, initial_plaintext[0..], ciphertext[0..initial_plaintext.len]));
 
     var plaintext_buffer: [2 * Aes.block_length]u8 = undefined;
+    const plaintext = try Aes.decrypt(plaintext_buffer[0..], ciphertext[0..], test_key, test_iv);
+
+    try t.expect(plaintext.len == initial_plaintext.len);
+    try t.expectEqualSlices(u8, plaintext, initial_plaintext);
+}
+
+test "Encrypt and decrypt of two block lengths" {
+    const initial_plaintext = "this is a total of 32 chars wide";
+    var ciphertext_buffer: [3 * Aes.block_length]u8 = undefined;
+
+    const ciphertext = Aes.encrypt(ciphertext_buffer[0..], initial_plaintext[0..], test_key, test_iv);
+    try t.expect(ciphertext.len % Aes.block_length == 0);
+    try t.expect(!std.mem.eql(u8, initial_plaintext[0..], ciphertext[0..initial_plaintext.len]));
+
+    var plaintext_buffer: [3 * Aes.block_length]u8 = undefined;
     const plaintext = try Aes.decrypt(plaintext_buffer[0..], ciphertext[0..], test_key, test_iv);
 
     try t.expect(plaintext.len == initial_plaintext.len);
