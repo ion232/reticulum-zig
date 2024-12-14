@@ -9,17 +9,17 @@ pub fn Pkcs7(comptime block_size: u8) type {
     return struct {
         const block_length = block_size;
 
-        pub fn pad(last_data: []const u8, buffer: []u8) []u8 {
+        pub fn pad(data: []const u8, buffer: []u8) []u8 {
             std.debug.assert(buffer.len >= block_length);
 
-            const r: u8 = @intCast(last_data.len % block_length);
+            const r: u8 = @intCast(data.len % block_length);
             const n = block_length - r;
 
             for (0..n) |i| {
-                buffer[last_data.len + i] = n;
+                buffer[data.len + i] = n;
             }
 
-            return buffer[0 .. last_data.len + n];
+            return buffer[0 .. data.len + n];
         }
 
         pub fn unpad(blocks: []const u8) ![]const u8 {
