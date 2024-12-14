@@ -108,6 +108,7 @@ test "Fernet - encrypt and decrypt of block length" {
     const fernet = Fernet.random();
     const plaintext = "reticulum-zig :)";
     var ciphertext: [2 * Aes.block_length]u8 = undefined;
+    t.expect(plaintext.len == Aes.block_length);
 
     const token = fernet.encrypt(plaintext, &ciphertext);
     try t.expect(fernet.verify(&token));

@@ -87,6 +87,7 @@ test "Encrypt and decrypt empty" {
 test "Encrypt and decrypt of block length" {
     const initial_plaintext = "this is 16 chars";
     var ciphertext_buffer: [2 * Aes.block_length]u8 = undefined;
+    t.expect(initial_plaintext.len == Aes.block_length);
 
     const ciphertext = Aes.encrypt(ciphertext_buffer[0..], initial_plaintext[0..], test_key, test_iv);
     try t.expect(ciphertext.len % Aes.block_length == 0);
@@ -102,6 +103,7 @@ test "Encrypt and decrypt of block length" {
 test "Encrypt and decrypt of two block lengths" {
     const initial_plaintext = "this is a total of 32 chars wide";
     var ciphertext_buffer: [3 * Aes.block_length]u8 = undefined;
+    t.expect(initial_plaintext.len == 2 * Aes.block_length);
 
     const ciphertext = Aes.encrypt(ciphertext_buffer[0..], initial_plaintext[0..], test_key, test_iv);
     try t.expect(ciphertext.len % Aes.block_length == 0);

@@ -1,5 +1,6 @@
 const std = @import("std");
 const crypto = @import("src/crypto/crypto.zig");
+const ed25519 = crypto.ed25519;
 const x25519 = crypto.x25519;
 
 const DhKeyPair = crypto.x25519.KeyPair;
@@ -11,8 +12,7 @@ pub const Identity = struct {
     sig_key_pair: SignatureKeyPair,
     short_hash: ShortHash,
 
-    pub fn init() Identity {
-        // ion232: TODO: Change this to use generateDeterministic() and hw.rand.bytes().
+    pub fn random() Identity {
         const dh_key_pair = DhKeyPair.generate();
         const sig_key_pair = SignatureKeyPair.generate();
         const short_hash = ShortHash.init(dh_key_pair.public_key);
@@ -30,10 +30,11 @@ pub const ShortHash = struct {
 
     bytes: [length]u8,
 
-    pub fn init(public_key: *const x25519.PublicKey) ShortHash {
+    pub fn init(dh_pub_key: *const x25519.PublicKey, sig_pub_key: *const ed25519.PublicKey) ShortHash {
         var hash: [Sha256.digest_length]u8 = undefined;
         var hasher = Sha256.init(.{});
-        hasher.update(public_key);
+        hasher.update(dh_pub_key);
+        hasher.update(sig_pub_key);
         hasher.final(hash[0..]);
 
         const bytes: [length]u8 = undefined;

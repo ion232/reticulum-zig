@@ -6,7 +6,7 @@ pub const Identity = identity.Identity;
 pub const Endpoint = struct {
     identity: Identity,
 
-    // ion232: Can't call this identity because it shadows import.
+    // ion232: Can't call this identity because it shadows the import.
     pub fn init(id: Identity) Endpoint {
         return .{
             .identity = id,
