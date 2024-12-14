@@ -5,126 +5,136 @@ pub const UnpadError = error{
     InvalidPadValue,
 };
 
-pub fn Pkcs7(comptime block_length: u8) type {
+pub fn Pkcs7(comptime block_size: u8) type {
     return struct {
-        pub fn pad(data: []const u8, buffer: []u8) []u8 {
-            const r: u8 = @intCast(data.len % block_length);
+        const block_length = block_size;
+
+        pub fn pad(last_data: []const u8, buffer: []u8) []u8 {
+            std.debug.assert(buffer.len >= block_length);
+
+            const r: u8 = @intCast(last_data.len % block_length);
             const n = block_length - r;
-            std.debug.assert(buffer.len >= data.len);
 
             for (0..n) |i| {
-                buffer[data.len + i] = n;
+                buffer[last_data.len + i] = n;
             }
 
-            return out[0 .. data.len + n];
+            return buffer[0 .. last_data.len + n];
         }
 
-        pub fn unpad(data: []const u8) ![]const u8 {
-            if (data.len == 0 or (data.len % block_length) != 0) {
+        pub fn unpad(blocks: []const u8) ![]const u8 {
+            if (blocks.len < block_length or (blocks.len % block_length) != 0) {
                 return UnpadError.InvalidLength;
             }
 
-            const n = data[data.len - 1];
-            if (n == 0 or n >= block_length or n > data.len) {
+            const last_block = blocks[blocks.len - block_length .. blocks.len];
+            const n = last_block[last_block.len - 1];
+
+            if (n == 0 or n > block_length) {
                 return UnpadError.InvalidPadValue;
             }
 
             for (0..n) |i| {
-                if (n != data[data.len - i - 1]) {
+                if (n != last_block[last_block.len - i - 1]) {
                     return UnpadError.InvalidPadValue;
                 }
             }
 
-            return data[0 .. data.len - n];
+            return blocks[0 .. blocks.len - n];
         }
     };
 }
 
 const t = std.testing;
+const t_block_length: u8 = 16;
+const pkcs7 = Pkcs7(t_block_length);
 
 test "pad - empty" {
-    const block_length = 16;
-
     const data: [0]u8 = undefined;
-    var out: [block_length]u8 = undefined;
+    var out: [pkcs7.block_length]u8 = undefined;
 
-    const padded = pad(block_length, &data, &out);
-    try t.expectEqual(block_length, padded.len);
-    try t.expectEqual(block_length, padded[0]);
+    const padded = pkcs7.pad(&data, &out);
+    try t.expectEqual(pkcs7.block_length, padded.len);
+    try t.expectEqual(pkcs7.block_length, padded[0]);
 }
 
 test "pad - length 1" {
-    const block_length = 16;
-
     var data: [1]u8 = undefined;
-    var out: [block_length]u8 = undefined;
+    var out: [pkcs7.block_length]u8 = undefined;
 
     data[0] = 1;
 
-    const padded = pad(block_length, &data, &out);
-    try t.expectEqual(@as(usize, block_length), padded.len);
-    try t.expectEqual(@as(u8, block_length - 1), padded[padded.len - 1]);
+    const padded = pkcs7.pad(&data, &out);
+    try t.expectEqual(@as(usize, pkcs7.block_length), padded.len);
+    try t.expectEqual(@as(u8, pkcs7.block_length - 1), padded[padded.len - 1]);
 }
 
 test "pad - block size" {
-    const block_length = 16;
+    var data: [pkcs7.block_length]u8 = undefined;
+    var out: [2 * pkcs7.block_length]u8 = undefined;
 
-    var data: [block_length]u8 = undefined;
-    var out: [2 * block_length]u8 = undefined;
+    @memset(data[0..pkcs7.block_length], 1);
 
-    @memset(data[0..block_length], 1);
-
-    const padded = pad(block_length, &data, &out);
-    try t.expectEqual(@as(usize, 2 * block_length), padded.len);
-    try t.expectEqual(@as(u8, block_length), padded[padded.len - 1]);
+    const padded = pkcs7.pad(&data, &out);
+    try t.expectEqual(@as(usize, 2 * pkcs7.block_length), padded.len);
+    try t.expectEqual(@as(u8, pkcs7.block_length), padded[padded.len - 1]);
 }
 
-test "unpad - valid one block" {
-    const block_length = 16;
+test "unpad - one valid block" {
+    var data: [pkcs7.block_length]u8 = undefined;
+    @memset(data[0..pkcs7.block_length], 4);
 
-    var data: [block_length]u8 = undefined;
-    @memset(data[0..block_length], 4);
-
-    const unpadded = try unpad(block_length, &data);
-    try t.expectEqual(@as(usize, block_length - 4), unpadded.len);
+    const unpadded = try pkcs7.unpad(&data);
+    try t.expectEqual(@as(usize, pkcs7.block_length - 4), unpadded.len);
 }
 
-test "unpad - valid two blocks" {
-    const block_length = 16;
-    const real_data_length = 2 * (block_length - 1);
+test "unpad - two valid blocks" {
+    const real_data_length = (2 * pkcs7.block_length) - 2;
 
-    var data: [2 * block_length]u8 = undefined;
+    var data: [2 * pkcs7.block_length]u8 = undefined;
 
     @memset(data[0..real_data_length], 1);
     @memset(data[real_data_length .. real_data_length + 2], 2);
 
-    const unpadded = try unpad(block_length, &data);
+    const unpadded = try pkcs7.unpad(&data);
     try t.expectEqual(@as(usize, real_data_length), unpadded.len);
+}
+
+test "unpad - data plus full padding block" {
+    var data: [2 * pkcs7.block_length]u8 = undefined;
+    @memset(data[pkcs7.block_length .. 2 * pkcs7.block_length], pkcs7.block_length);
+
+    const unpadded = try pkcs7.unpad(&data);
+    try t.expectEqual(pkcs7.block_length, unpadded.len);
+}
+
+test "unpad - just padding block" {
+    var data: [pkcs7.block_length]u8 = undefined;
+    @memset(data[0..pkcs7.block_length], pkcs7.block_length);
+
+    const unpadded = try pkcs7.unpad(&data);
+    try t.expectEqual(0, unpadded.len);
 }
 
 // ion232: A value that's too small can't be tested for. I don't think it actually matters though in practice.
 
 test "unpad - value too big" {
-    const block_length = 16;
+    var data: [pkcs7.block_length]u8 = undefined;
 
-    var data: [block_length]u8 = undefined;
+    @memset(data[0 .. pkcs7.block_length - 1], 1);
+    data[pkcs7.block_length - 1] = pkcs7.block_length + 1;
 
-    @memset(data[0 .. block_length - 1], 1);
-    data[block_length - 1] = block_length + 1;
-
-    const unpadded = unpad(block_length, &data);
+    const unpadded = pkcs7.unpad(&data);
     try t.expectError(UnpadError.InvalidPadValue, unpadded);
 }
 
 test "unpad - invalid values" {
-    const block_length = 16;
+    var data: [pkcs7.block_length]u8 = undefined;
 
-    var data: [block_length]u8 = undefined;
+    @memset(data[0 .. pkcs7.block_length - 2], 1);
+    data[pkcs7.block_length - 2] = 0;
+    data[pkcs7.block_length - 1] = 2;
 
-    @memset(data[0 .. block_length - 2], 1);
-    data[block_length - 2] = 0;
-    data[block_length - 1] = 2;
-
-    const unpadded = unpad(block_length, &data);
+    const unpadded = pkcs7.unpad(&data);
     try t.expectError(UnpadError.InvalidPadValue, unpadded);
 }
