@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
-const hw = @import("hw/hw.zig");
 const aes = @import("aes.zig");
+const hw = @import("src/hw/hw.zig");
 
 const Aes = aes.Aes;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;

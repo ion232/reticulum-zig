@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const tests = b.addTest(.{
-        .root_source_file = b.path("src/crypto/fernet.zig"),
+        .root_source_file = b.path("src"),
         .target = target,
         .optimize = optimize,
     });
