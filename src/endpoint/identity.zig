@@ -8,14 +8,31 @@ const SignatureKeyPair = crypto.ed25519.KeyPair;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 pub const Identity = struct {
-    dh_key_pair: DhKeyPair,
-    sig_key_pair: SignatureKeyPair,
+    const Self = @This();
+
+    dh_public_key: [32]u8,
+    sig_public_key: [32]u8,
+    dh_secret_key: ?[32]u8,
+    sig_secret_key: ?[32]u8,
     short_hash: ShortHash,
+
+    pub fn from_public_key(dh_public_key: [32]u8, sig_public_key: [32]u8) Identity {
+        const short_hash = ShortHash.from_keys(dh_public_key, sig_public_key);
+        return .{
+            .dh_public_key = dh_public_key,
+            .sig_public_key = sig_public_key,
+            .short_hash = short_hash,
+        };
+    }
+
+    pub fn has_secrets(self: *Self) bool {
+        return self.dh_secret_key != null and self.sig_secret_key != null;
+    }
 
     pub fn random() Identity {
         const dh_key_pair = DhKeyPair.generate();
         const sig_key_pair = SignatureKeyPair.generate();
-        const short_hash = ShortHash.init(dh_key_pair.public_key);
+        const short_hash = ShortHash.from_keys(dh_key_pair.public_key);
 
         return .{
             .dh_key_pair = dh_key_pair,
@@ -30,7 +47,7 @@ pub const ShortHash = struct {
 
     bytes: [length]u8,
 
-    pub fn init(dh_pub_key: *const x25519.PublicKey, sig_pub_key: *const ed25519.PublicKey) ShortHash {
+    pub fn from_keys(dh_pub_key: *const x25519.PublicKey, sig_pub_key: *const ed25519.PublicKey) ShortHash {
         var hash: [Sha256.digest_length]u8 = undefined;
         var hasher = Sha256.init(.{});
         hasher.update(dh_pub_key);

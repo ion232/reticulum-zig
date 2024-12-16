@@ -21,7 +21,7 @@ pub const Clock = struct {
     ptr: *anyopaque,
     monotonicTimeFn: *const fn (ptr: *anyopaque) u64,
 
-    fn monotonicTime(self: *Clock) u64 {
+    pub fn monotonicTime(self: *Clock) u64 {
         return self.monotonicTimeFn(self.ptr);
     }
 };

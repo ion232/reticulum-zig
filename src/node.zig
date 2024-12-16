@@ -4,45 +4,115 @@ const endpoint = @import("endpoint/endpoint.zig");
 
 const Allocator = std.mem.Allocator;
 const Sources = @import("sources.zig").Sources;
+const Packet = @import("packet.zig").Packet;
 
 const Interface = @import("interface/interface.zig").Interface;
-const Packet = u8;
-const PacketQueue = std.PriorityQueue(Packet, void, compare_packets);
 
 pub const Node = struct {
     const Self = @This();
 
     ally: Allocator,
-    sources: Sources,
-    receive_queue: PacketQueue,
-    send_queue: PacketQueue,
+    receiver: Receiver,
+    sender: Sender,
+    config: Config,
 
-    pub fn init(ally: Allocator, sources: Sources) Node {
+    pub fn init(ally: Allocator, config: Config) Node {
         return .{
             .ally = ally,
-            .sources = sources,
-            .receive_queue = PacketQueue.init(ally, void),
-            .send_queue = PacketQueue.init(ally, void),
+            .config = config,
+            .receiver = Receiver.init(ally),
+            .sender = Sender.init(ally),
         };
     }
 
     pub fn process(self: *Self) !void {
-        const packet = self.receive_queue.peek();
-        if (packet == null) {
+        const front = self.receiver.queue.peek();
+
+        if (front == null) {
             return;
         }
 
-        try process_packet(packet);
+        const now = self.config.sources.clock.monotonicTime();
+        _ = now;
+
+        const element = front.?;
+        const packet = &element.packet;
+        const header = &packet.header;
+
+        defer {
+            self.ally.free(element.raw_data);
+        }
+
+        if (self.should_drop(packet)) {
+            return;
+        }
+
+        header.hops += 1;
+
+        if (header.endpoint == .plain and header.propagation == .broadcast) {
+            self.sender.send(packet);
+        }
     }
 
-    fn process_packet(self: *Self, packet: Packet) !void {}
-
-    fn send(self: *Self, packet: Packet) !void {
-        try self.send_queue.add(packet);
+    fn should_drop(self: *Self, packet: *Packet) bool {
+        _ = self;
+        _ = packet;
+        return false;
     }
 };
 
-fn compare_packets(context: void, a: Packet, b: Packet) std.math.Order {
-    _ = context;
-    return std.math.order(a, b);
-}
+const Config = struct {
+    sources: Sources,
+};
+
+const Receiver = struct {
+    const Self = @This();
+    const Element = struct {
+        packet: Packet,
+        raw_data: []u8,
+    };
+    const Queue = std.PriorityQueue(Element, void, compare);
+
+    queue: Queue,
+
+    fn init(ally: Allocator) Receiver {
+        return .{
+            .queue = Queue.init(ally, void),
+        };
+    }
+
+    fn compare(context: void, a: Element, b: Element) std.math.Order {
+        _ = context;
+        return std.math.order(a, b);
+    }
+};
+
+const Sender = struct {
+    const Self = @This();
+    const Element = struct {
+        data: []const u8,
+    };
+    const Queue = std.PriorityQueue(Element, void, compare);
+
+    queue: Queue,
+
+    fn init(ally: Allocator) Sender {
+        return .{
+            .queue = Queue.init(ally, void),
+        };
+    }
+
+    fn send(self: *Self, packet: *Packet) !void {
+        const buffer = self.ally.alloc(u8, packet.size());
+        try packet.write(buffer);
+        try self.queue.add(.{
+            .data = buffer,
+        });
+
+        return;
+    }
+
+    fn compare() std.math.Order {
+        return std.math.Order.eq;
+    }
+};
