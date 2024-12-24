@@ -1,4 +1,5 @@
 const std = @import("std");
+// const Hash = @import("src/hash.zig").Hash;
 
 pub const Packet = struct {
     const Self = @This();
@@ -9,6 +10,47 @@ pub const Packet = struct {
     other_endpoint: ?[]const u8,
     context: u8,
     payload: []const u8,
+
+    pub fn hash(self: *const Self) Hash {
+        // ion232: This can be made cleaner by modifying from_items to ignore optional fields.
+        const chunked_header: ChunkedHeader = @bitCast(self.header);
+        const header_bits: u8 = chunked_header.endpoint_and_purpose;
+
+        if (self.other_endpoint) |other_endpoint| {
+            if (self.ifac) |ifac| {
+                return Hash.from_items(.{
+                    .header_bits = header_bits,
+                    .ifac = ifac,
+                    .endpoint = endpoint,
+                    .other_endpoint = other_endpoint,
+                    .context = context,
+                    .payload = payload,
+                });
+            } else {
+                return Hash.from_items(.{
+                    .header_bits = header_bits,
+                    .endpoint = endpoint,
+                    .other_endpoint = other_endpoint,
+                    .context = context,
+                    .payload = payload,
+                });
+            }
+        } else {
+            return Hash.from_items(.{
+                .header_bits = header_bits,
+            });
+        }
+        if self.header_type == Packet.HEADER_2:
+            hashable_part += self.raw[(RNS.Identity.TRUNCATED_HASHLENGTH//8)+2:]
+        else:
+            hashable_part += self.raw[2:]
+
+        return hashable_part
+
+        return Hash.from_items(.{
+
+        });
+    }
 
     pub fn parse(bytes: []const u8) !Packet {
         const header_size = @sizeOf(Header);
@@ -79,7 +121,7 @@ pub const Header = packed struct {
             auth,
         };
 
-        pub const AddressCount = enum(u1) {
+        pub const Configuration = enum(u1) {
             one,
             two,
         };
@@ -110,10 +152,20 @@ pub const Header = packed struct {
     };
 
     ifac: Flag.Ifac,
-    address_count: Flag.AddressCount,
+    configuration: Flag.Configuration,
     context: Flag.Context,
     propagation: Flag.Propagation,
     endpoint: Flag.Endpoint,
     purpose: Flag.Purpose,
     hops: u8,
 };
+
+const ChunkedHeader = packed struct {
+    other_flags: u4,
+    endpoint_and_purpose: u4,
+    hops: u8,
+};
+
+test "Header size" {
+    try std.testing.expect(@sizeOf(Header) == 2);
+}

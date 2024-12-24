@@ -67,11 +67,11 @@ const Config = struct {
 
 const Receiver = struct {
     const Self = @This();
+    const Queue = std.PriorityQueue(Element, void, compare);
     const Element = struct {
         packet: Packet,
         raw_data: []u8,
     };
-    const Queue = std.PriorityQueue(Element, void, compare);
 
     queue: Queue,
 
@@ -89,10 +89,10 @@ const Receiver = struct {
 
 const Sender = struct {
     const Self = @This();
+    const Queue = std.PriorityQueue(Element, void, compare);
     const Element = struct {
         data: []const u8,
     };
-    const Queue = std.PriorityQueue(Element, void, compare);
 
     queue: Queue,
 
