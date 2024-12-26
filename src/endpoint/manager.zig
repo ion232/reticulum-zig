@@ -15,7 +15,17 @@ pub const Manager = struct {
         };
     }
 
-    pub fn encrypt(endpoint: Endpoint) void {}
+    pub fn make_endpoint() Endpoint {
+        // Does it accept links?
+        // Do it return proofs?
+        // Are ratchets enabled?
+    }
+
+    pub fn encrypt(endpoint: Endpoint, data: []u8) void {}
+
+    pub fn decrypt(endpoint: Endpoint, data: []u8) void {}
+
+    pub fn sign(endpoint: Endpoint, data: []u8) [16]u8 {}
 };
 
 pub const Endpoints = struct {

@@ -14,11 +14,12 @@ pub const Node = struct {
     ally: Allocator,
     receiver: Receiver,
     sender: Sender,
-    config: Config,
+    source: Sources,
 
-    pub fn init(ally: Allocator, config: Config) Node {
+    pub fn init(ally: Allocator, sources: Sources, config: Config) Node {
         return .{
             .ally = ally,
+            .sources = sources,
             .config = config,
             .receiver = Receiver.init(ally),
             .sender = Sender.init(ally),
@@ -33,8 +34,6 @@ pub const Node = struct {
         }
 
         const now = self.config.sources.clock.monotonicTime();
-        _ = now;
-
         const element = front.?;
         const packet = &element.packet;
         const header = &packet.header;
@@ -43,10 +42,11 @@ pub const Node = struct {
             self.ally.free(element.raw_data);
         }
 
-        if (self.should_drop(packet)) {
+        if (self.shouldDrop(packet)) {
             return;
         }
 
+        _ = now;
         header.hops += 1;
 
         if (header.endpoint == .plain and header.propagation == .broadcast) {
@@ -54,65 +54,10 @@ pub const Node = struct {
         }
     }
 
-    fn should_drop(self: *Self, packet: *Packet) bool {
+    fn shouldDrop(self: *Self, packet: *Packet) bool {
         _ = self;
         _ = packet;
+        // Ifac flag should match whether we are authenticated, else drop.
         return false;
-    }
-};
-
-const Config = struct {
-    sources: Sources,
-};
-
-const Receiver = struct {
-    const Self = @This();
-    const Queue = std.PriorityQueue(Element, void, compare);
-    const Element = struct {
-        packet: Packet,
-        raw_data: []u8,
-    };
-
-    queue: Queue,
-
-    fn init(ally: Allocator) Receiver {
-        return .{
-            .queue = Queue.init(ally, void),
-        };
-    }
-
-    fn compare(context: void, a: Element, b: Element) std.math.Order {
-        _ = context;
-        return std.math.order(a, b);
-    }
-};
-
-const Sender = struct {
-    const Self = @This();
-    const Queue = std.PriorityQueue(Element, void, compare);
-    const Element = struct {
-        data: []const u8,
-    };
-
-    queue: Queue,
-
-    fn init(ally: Allocator) Sender {
-        return .{
-            .queue = Queue.init(ally, void),
-        };
-    }
-
-    fn send(self: *Self, packet: *Packet) !void {
-        const buffer = self.ally.alloc(u8, packet.size());
-        try packet.write(buffer);
-        try self.queue.add(.{
-            .data = buffer,
-        });
-
-        return;
-    }
-
-    fn compare() std.math.Order {
-        return std.math.Order.eq;
     }
 };

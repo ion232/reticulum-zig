@@ -1,55 +1,33 @@
 const std = @import("std");
-// const Hash = @import("src/hash.zig").Hash;
+const Hash = @import("src/hash.zig").Hash;
 
 pub const Packet = struct {
     const Self = @This();
 
     header: Header,
-    ifac: ?[]const u8,
-    endpoint: []const u8,
-    other_endpoint: ?[]const u8,
-    context: u8,
+    endpoints: Endpoints,
+    context: Context,
     payload: []const u8,
 
     pub fn hash(self: *const Self) Hash {
-        // ion232: This can be made cleaner by modifying from_items to ignore optional fields.
         const chunked_header: ChunkedHeader = @bitCast(self.header);
         const header_bits: u8 = chunked_header.endpoint_and_purpose;
 
-        if (self.other_endpoint) |other_endpoint| {
-            if (self.ifac) |ifac| {
-                return Hash.from_items(.{
-                    .header_bits = header_bits,
-                    .ifac = ifac,
-                    .endpoint = endpoint,
-                    .other_endpoint = other_endpoint,
-                    .context = context,
-                    .payload = payload,
-                });
-            } else {
-                return Hash.from_items(.{
-                    .header_bits = header_bits,
-                    .endpoint = endpoint,
-                    .other_endpoint = other_endpoint,
-                    .context = context,
-                    .payload = payload,
-                });
-            }
-        } else {
-            return Hash.from_items(.{
+        return switch (self.endpoints) {
+            .normal => |normal| Hash.from_items(.{
                 .header_bits = header_bits,
-            });
-        }
-        if self.header_type == Packet.HEADER_2:
-            hashable_part += self.raw[(RNS.Identity.TRUNCATED_HASHLENGTH//8)+2:]
-        else:
-            hashable_part += self.raw[2:]
-
-        return hashable_part
-
-        return Hash.from_items(.{
-
-        });
+                .endpoint = normal.endpoint,
+                .context = self.context,
+                .payload = self.payload,
+            }),
+            .transport => |transport| Hash.from_items(.{
+                .header_bits = header_bits,
+                .transport_id = transport.transport_id,
+                .endpoint = transport.endpoint,
+                .context = self.context,
+                .payload = self.payload,
+            }),
+        };
     }
 
     pub fn parse(bytes: []const u8) !Packet {
@@ -114,16 +92,50 @@ pub const Packet = struct {
     }
 };
 
+pub const Endpoints = union(Header.Flag.Format) {
+    normal: struct {
+        endpoint: []const u8,
+    },
+    transport: struct {
+        transport_id: []const u8,
+        endpoint: []const u8,
+    },
+};
+
+pub const Context = enum(u8) {
+    none = 0,
+    resource = 1,
+    resource_advertisement = 2,
+    resource_request = 3,
+    resource_hashmap_update = 4,
+    resource_proof = 5,
+    resource_initiator_cancel = 6,
+    resource_receiver_cancel = 7,
+    cache_request = 8,
+    request = 9,
+    response = 10,
+    path_response = 11,
+    command = 12,
+    command_status = 13,
+    link_channel = 14,
+    keep_alive = 250,
+    link_identify = 251,
+    link_close = 252,
+    link_proof = 253,
+    link_request_rtt = 254,
+    link_request_proof = 255,
+};
+
 pub const Header = packed struct {
     pub const Flag = struct {
         pub const Ifac = enum(u1) {
             open,
-            auth,
+            authenticated,
         };
 
-        pub const Configuration = enum(u1) {
-            one,
-            two,
+        pub const Format = enum(u1) {
+            normal,
+            transport,
         };
 
         pub const Context = enum(u1) {
@@ -152,7 +164,7 @@ pub const Header = packed struct {
     };
 
     ifac: Flag.Ifac,
-    configuration: Flag.Configuration,
+    format: Flag.Format,
     context: Flag.Context,
     propagation: Flag.Propagation,
     endpoint: Flag.Endpoint,
