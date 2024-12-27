@@ -1,7 +1,4 @@
 const Self = @This();
 
-authenticated: bool,
-
-pub const default = Self{
-    .authenticated = false,
-};
+authenticated: bool = false,
+max_incoming_packets: usize = 1024,
