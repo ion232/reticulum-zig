@@ -14,7 +14,7 @@ pub fn init(
     direction: Direction,
     method: Method,
     application_name: []const u8,
-    aspects: ?[][]const u8,
+    // aspects: ?[][]const u8,
 ) Self {
     return .{
         .identity = identity,

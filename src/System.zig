@@ -1,7 +1,9 @@
 const std = @import("std");
 const Timer = std.time.Timer;
 
-pub const Self = @This();
+pub const Os = @import("system/Os.zig");
+
+const Self = @This();
 
 clock: Clock,
 rng: Rng,

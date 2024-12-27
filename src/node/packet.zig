@@ -12,7 +12,6 @@ pub const Packet = struct {
     payload: []const u8,
 
     pub fn hash(self: *const Self) Hash {
-        // I'm pretty sure this will work correctly on all platforms.
         const header_bits: u8 = std.mem.bytesAsSlice(u4, self.header)[1];
 
         return switch (self.endpoints) {
@@ -105,27 +104,27 @@ pub const Endpoints = union(Header.Flag.Format) {
 };
 
 pub const Context = enum(u8) {
-    none = 0,
-    resource = 1,
-    resource_advertisement = 2,
-    resource_request = 3,
-    resource_hashmap_update = 4,
-    resource_proof = 5,
-    resource_initiator_cancel = 6,
-    resource_receiver_cancel = 7,
-    cache_request = 8,
-    request = 9,
-    response = 10,
-    path_response = 11,
-    command = 12,
-    command_status = 13,
-    link_channel = 14,
+    none,
+    resource,
+    resource_advertisement,
+    resource_request,
+    resource_hashmap_update,
+    resource_proof,
+    resource_initiator_cancel,
+    resource_receiver_cancel,
+    cache_request,
+    request,
+    response,
+    path_response,
+    command,
+    command_status,
+    link_channel,
     keep_alive = 250,
-    link_identify = 251,
-    link_close = 252,
-    link_proof = 253,
-    link_request_rtt = 254,
-    link_request_proof = 255,
+    link_identify,
+    link_close,
+    link_proof,
+    link_request_rtt,
+    link_request_proof,
 };
 
 pub const Header = packed struct {

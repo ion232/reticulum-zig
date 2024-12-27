@@ -25,12 +25,12 @@ incoming: Queue(.in),
 outgoing: std.ArrayList(?Queue(.out)),
 routes: std.StringHashMap(Hash),
 
-pub fn init(ally: Allocator, system: System, config: Config) Self {
+pub fn init(ally: Allocator, system: System, config: Config) Allocator.Error!Self {
     return .{
         .ally = ally,
         .system = system,
         .config = config,
-        .incoming = Queue(.in).init(ally, config.max_incoming_packets),
+        .incoming = try Queue(.in).init(ally, config.max_incoming_packets),
         .outgoing = std.ArrayList(Queue(.out)).init(ally),
     };
 }

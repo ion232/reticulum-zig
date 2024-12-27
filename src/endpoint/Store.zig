@@ -1,14 +1,16 @@
 const std = @import("std");
 const crypto = @import("src/crypto.zig");
-const Public = crypto.Identity.PublicKeys;
 
 const Allocator = std.mem.Allocator;
+const Public = crypto.Identity.PublicKeys;
+
+const Self = @This();
 
 ally: Allocator,
 identities: std.Arr,
 endpoints: Endpoints,
 
-pub fn init(ally: Allocator) Store {
+pub fn init(ally: Allocator) Self {
     return .{
         .endpoints = Endpoints.init(ally),
     };
