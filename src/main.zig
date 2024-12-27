@@ -1,7 +1,8 @@
 const std = @import("std");
 
-const System = @import("System.zig");
+const Os = @import("system/Os.zig");
 
 pub fn main() !void {
-    const system = try System.default();
+    const os = try Os.init();
+    const system = os.system();
 }

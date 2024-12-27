@@ -1,11 +1,11 @@
 const std = @import("std");
-const identity = @import("identity.zig");
-const crypto = @import("src/crypto/crypto.zig");
+const crypto = @import("src/crypto.zig");
+const Public = crypto.Identity.PublicKeys;
 
 const Allocator = std.mem.Allocator;
-const Identity = identity.Identity;
 
-identities: Identity,
+ally: Allocator,
+identities: std.Arr,
 endpoints: Endpoints,
 
 pub fn init(ally: Allocator) Store {
@@ -29,9 +29,15 @@ pub fn sign(endpoint: Endpoint, data: []u8) [16]u8 {}
 const Endpoints = struct {
     const Entry = struct {
         timestamp: i64,
-        packet_hash: void,
-        public_key: crypto.X25519.PublicKey,
-        application_data: void,
+        expiry_time: i64,
+        hops: u8,
+        origin: LongHash,
+        origin_interface: u8,
+        packet_hash: Hash,
+        public_keys: PublicKeys,
+        // unique_bytes: ...,
+        // origin_announce: ...,
+        application_data: []const u8,
     };
 
     map: std.StringHashMap(Entry),

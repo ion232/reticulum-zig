@@ -3,9 +3,8 @@ const Allocator = std.mem.Allocator;
 
 fn RingBuffer(comptime T: type) type {
     return struct {
-        const Error = error{
+        pub const Error = error{
             Full,
-            Empty,
         };
 
         const Self = @This();

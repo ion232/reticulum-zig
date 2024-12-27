@@ -5,6 +5,7 @@ const Rng = @import("src/System.zig").Rng;
 
 const Self = @This();
 
+pub const PublicKeys = Public;
 pub const Public = struct {
     dh: X25519.PublicKey,
     sign: Ed25519.PublicKey,

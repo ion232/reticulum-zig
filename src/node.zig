@@ -9,10 +9,12 @@ const RingBuffer = @import("node/RingBuffer.zig").RingBuffer;
 const System = @import("System.zig");
 
 const Self = @This();
-const InterfaceId = u8;
-const Error = error{
-    TooManyInterfaces,
+
+pub const InterfaceId = u8;
+pub const Error = error{
     InvalidInterfaceId,
+    TooManyInterfaces,
+    TooManyIncoming,
 };
 
 ally: Allocator,
@@ -20,19 +22,24 @@ system: System,
 config: Config,
 interfaces: std.ArrayList(?Interface),
 incoming: Queue(.in),
-outgoing: std.ArrayList(Queue(.out)),
+outgoing: std.ArrayList(?Queue(.out)),
+routes: std.StringHashMap(Hash),
 
 pub fn init(ally: Allocator, system: System, config: Config) Self {
     return .{
         .ally = ally,
         .system = system,
         .config = config,
-        .incoming = Queue(.in).init(
-            ally,
-            config.max_incoming_packets,
-        ),
+        .incoming = Queue(.in).init(ally, config.max_incoming_packets),
         .outgoing = std.ArrayList(Queue(.out)).init(ally),
     };
+}
+
+pub fn deinit(self: *Self) void {
+    self.interfaces.deinit();
+    self.incoming.deinit(self.ally);
+    self.outgoing.deinit();
+    self.* = undefined;
 }
 
 pub fn process(self: *Self) Error!void {
@@ -63,28 +70,61 @@ pub fn process(self: *Self) Error!void {
     }
 }
 
+pub fn push(self: *Self, id: InterfaceId, packet: Packet) !void {
+    try self.incoming.push(.{
+        .packet = packet,
+        .id = id,
+    });
+}
+
+pub fn pop(self: *Self, id: InterfaceId) Error!?[]const u8 {
+    if (self.interfaces.items.len >= id) {
+        return Error.InvalidInterfaceId;
+    }
+
+    if (self.outgoing.items[id]) |queue| {
+        if (queue.pop()) |element| {
+            return element.data;
+        } else {
+            return null;
+        }
+    }
+
+    return Error.InvalidInterfaceId;
+}
+
 pub fn addInterface(self: *Self, interface: Interface) Error!InterfaceId {
     if (self.interfaces.items.len == self.interfaces.capacity) {
         return Error.TooManyInterfaces;
     }
 
-    for (0.., self.interfaces.items) |id, entry| {
-        if (entry == null) {
+    const queue = Queue(.out).init(
+        self.ally,
+        self.config.max_outgoing_packets,
+    );
+
+    for (0.., self.interfaces.items) |id, *entry| {
+        if (entry.* == null) {
             entry.* = interface;
+            self.outgoing.items[id] = queue;
             return id;
         }
     }
 
-    self.interfaces.append(interface);
+    const id = self.interfaces.items.len;
+    try self.interfaces.append(interface);
+    try self.outgoing.append(queue);
 
-    return self.interfaces.items.len - 1;
+    return id;
 }
 
 pub fn removeInterface(self: *Self, id: InterfaceId) Error!void {
-    if (id >= self.interfaces.items.len) {
+    if (id >= self.interfaces.items.len or id >= self.outgoing.items.len) {
         return Error.InvalidInterfaceId;
     }
     self.interfaces[id] = null;
+    self.outgoing[id].deinit();
+    self.outgoing[id] = null;
 }
 
 fn shouldDrop(self: *Self, packet: *Packet) bool {
@@ -101,11 +141,11 @@ fn Queue(comptime direction: Endpoint.Direction) type {
 }
 
 const Element = struct {
-    pub const In = struct {
+    const In = struct {
         packet: Packet,
-        interface_id: InterfaceId,
+        id: InterfaceId,
     };
-    pub const Out = struct {
+    const Out = struct {
         data: []const u8,
     };
 };

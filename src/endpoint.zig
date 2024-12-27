@@ -1,25 +1,34 @@
-pub const Identity = @import("identity.zig").Identity;
-pub const manager = @import("manager.zig");
+const Identity = @import("src/crypto.zig").Identity;
 
 pub const Builder = struct {};
 
-pub const Endpoint = struct {
-    identity: Identity,
+const Self = @This();
 
-    // ion232: Can't call this identity because it shadows the import.
-    pub fn init(id: Identity) Endpoint {
-        return .{
-            .identity = id,
-        };
-    }
-};
+identity: Identity,
+direction: Direction,
+method: Method,
+name: []const u8,
+
+pub fn init(
+    identity: Identity,
+    direction: Direction,
+    method: Method,
+    application_name: []const u8,
+    aspects: ?[][]const u8,
+) Self {
+    return .{
+        .identity = identity,
+        .direction = direction,
+        .method = method,
+    };
+}
 
 pub const Direction = enum {
     in,
     out,
 };
 
-pub const Type = enum {
+pub const Method = enum {
     plain,
     single,
     group,
