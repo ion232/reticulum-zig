@@ -1,6 +1,8 @@
 pub const Identity = @import("identity.zig").Identity;
 pub const manager = @import("manager.zig");
 
+pub const Builder = struct {};
+
 pub const Endpoint = struct {
     identity: Identity,
 

@@ -3,28 +3,36 @@ const crypto = @import("crypto/crypto.zig");
 const endpoint = @import("endpoint/endpoint.zig");
 
 const Allocator = std.mem.Allocator;
-const Sources = @import("sources.zig").Sources;
-const Packet = @import("packet.zig").Packet;
+const Config = @import("node/Config.zig");
+const System = @import("System.zig");
+const Packet = @import("node/Packet.zig");
+const Queue = @import("queue.zig").Queue;
 
 const Interface = @import("interface/interface.zig").Interface;
 
 pub const Node = struct {
     const Self = @This();
+    const InterfaceId = u8;
 
     ally: Allocator,
-    receiver: Receiver,
-    sender: Sender,
-    source: Sources,
+    system: System,
+    config: Config,
+    incoming: Queue(.in),
+    outgoing: [InterfaceId]Queue(.out),
 
-    pub fn init(ally: Allocator, sources: Sources, config: Config) Node {
+    pub fn init(ally: Allocator, system: System, config: Config) Node {
         return .{
             .ally = ally,
-            .sources = sources,
+            .system = system,
             .config = config,
             .receiver = Receiver.init(ally),
             .sender = Sender.init(ally),
         };
     }
+
+    pub fn add_interface(interface: *const Interface) InterfaceId {}
+
+    pub fn remove_interface() InterfaceId {}
 
     pub fn process(self: *Self) !void {
         const front = self.receiver.queue.peek();
@@ -33,7 +41,7 @@ pub const Node = struct {
             return;
         }
 
-        const now = self.config.sources.clock.monotonicTime();
+        const now = self.system.clock.monotonicTime();
         const element = front.?;
         const packet = &element.packet;
         const header = &packet.header;

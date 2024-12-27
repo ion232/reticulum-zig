@@ -1,5 +1,7 @@
 const std = @import("std");
 
-pub const fernet = @import("fernet.zig");
-pub const ed25519 = @import("ed25519.zig");
-pub const x25519 = @import("x25519.zig");
+pub const Ed25519 = @import("crypto/Ed25519.zig");
+pub const Fernet = @import("crypto/Fernet.zig");
+pub const Hash = @import("crypto/Hash.zig");
+pub const Identity = @import("crypto/Identity.zig");
+pub const X25519 = @import("crypto/X25519.zig");

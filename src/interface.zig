@@ -1,10 +1,10 @@
-pub const Simulator = @import("simulator.zig").Simulator;
+const std = @import("std");
 
-pub const Interface = struct {
-    ptr: *anyopaque,
-    sendFn: *const fn (ptr: *anyopaque) u64,
+const Self = @This();
 
-    fn send(self: *Interface) u64 {
-        return self.sendFn(self.ptr);
-    }
-};
+ptr: *anyopaque,
+sendFn: *const fn (ptr: *anyopaque) u64,
+
+fn send(self: *Self) u64 {
+    return self.sendFn(self.ptr);
+}

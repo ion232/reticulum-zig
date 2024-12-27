@@ -1,5 +1,7 @@
 const std = @import("std");
-const Hash = @import("src/hash.zig").Hash;
+const Hash = @import("src/crypto.zig").Hash;
+
+pub const Builder = struct {};
 
 pub const Packet = struct {
     const Self = @This();
@@ -10,8 +12,8 @@ pub const Packet = struct {
     payload: []const u8,
 
     pub fn hash(self: *const Self) Hash {
-        const chunked_header: ChunkedHeader = @bitCast(self.header);
-        const header_bits: u8 = chunked_header.endpoint_and_purpose;
+        // I'm pretty sure this will work correctly on all platforms.
+        const header_bits: u8 = std.mem.bytesAsSlice(u4, self.header)[1];
 
         return switch (self.endpoints) {
             .normal => |normal| Hash.from_items(.{
@@ -169,12 +171,6 @@ pub const Header = packed struct {
     propagation: Flag.Propagation,
     endpoint: Flag.Endpoint,
     purpose: Flag.Purpose,
-    hops: u8,
-};
-
-const ChunkedHeader = packed struct {
-    other_flags: u4,
-    endpoint_and_purpose: u4,
     hops: u8,
 };
 
