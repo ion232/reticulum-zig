@@ -3,6 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Endpoint = @import("Endpoint.zig");
 const Interface = @import("Interface.zig");
+const Hash = @import("crypto.zig");
 const Config = @import("node/Config.zig");
 const Packet = @import("node/Packet.zig");
 const RingBuffer = @import("node/RingBuffer.zig").RingBuffer;

@@ -1,0 +1,12 @@
+.{
+    .name = "examples",
+    .version = "0.1.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "mvp/",
+    },
+    .dependencies = .{
+        .reticulum = .{ .path = "../" },
+    },
+}

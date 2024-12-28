@@ -2,7 +2,9 @@ const std = @import("std");
 const crypto = @import("src/crypto.zig");
 
 const Allocator = std.mem.Allocator;
-const Public = crypto.Identity.PublicKeys;
+const Endpoint = @import("src/Endpoint.zig");
+const PublicKeys = crypto.Identity.PublicKeys;
+const Hash = crypto.Hash;
 
 const Self = @This();
 
@@ -16,7 +18,7 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn make_endpoint() Endpoint {
+pub fn make_endpoint() *const Endpoint {
     // Does it accept links?
     // Do it return proofs?
     // Are ratchets enabled?
@@ -33,7 +35,7 @@ const Endpoints = struct {
         timestamp: i64,
         expiry_time: i64,
         hops: u8,
-        origin: LongHash,
+        origin: Hash,
         origin_interface: u8,
         packet_hash: Hash,
         public_keys: PublicKeys,

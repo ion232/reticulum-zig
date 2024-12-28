@@ -1,9 +1,10 @@
 const std = @import("std");
+const reticulum = @import("reticulum");
 
-const Os = @import("System.zig").Os;
-const Node = @import("Node.zig");
+const Os = reticulum.System.Os;
+const Node = reticulum.Node;
 
-test "Proof of concept" {
+pub fn main() !void {
     const gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ally = gpa.allocator();
     const os = try Os.init();
