@@ -5,8 +5,17 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ally = gpa.allocator();
     var os = try rt.System.Os.init();
+    var system = os.system();
 
-    const node = try rt.Node.init(ally, os.system(), .{});
+    const identity = rt.crypto.Identity.random(&system.rng);
+    const endpoint = rt.Endpoint.init(
+        identity,
+        .in,
+        .single,
+        "rt-zig-mvp",
+    );
+    const node = try rt.Node.init(ally, system, .{});
+
     const interface_id = try node.addInterface(.{});
     try node.push(interface_id, .{});
     try node.process();

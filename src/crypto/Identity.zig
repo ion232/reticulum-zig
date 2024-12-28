@@ -32,7 +32,7 @@ pub fn has_secret(self: *Self) bool {
     return self.secret != null;
 }
 
-pub fn random(rng: Rng) Self {
+pub fn random(rng: *Rng) Self {
     const dh_seed: [X25519.seed_length]u8 = undefined;
     const signature_seed: [Ed25519.KeyPair.seed_length]u8 = undefined;
 

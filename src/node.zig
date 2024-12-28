@@ -2,8 +2,9 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 const Endpoint = @import("Endpoint.zig");
+const Endpoints = @import("node/Endpoints.zig");
 const Interface = @import("Interface.zig");
-const Hash = @import("crypto.zig");
+const Hash = @import("crypto.zig").Hash;
 const Config = @import("node/Config.zig");
 const Packet = @import("node/Packet.zig");
 const RingBuffer = @import("node/RingBuffer.zig").RingBuffer;
@@ -11,7 +12,6 @@ const System = @import("System.zig");
 
 const Self = @This();
 
-pub const InterfaceId = u8;
 pub const Error = error{
     InvalidInterfaceId,
     TooManyInterfaces,
@@ -21,6 +21,7 @@ pub const Error = error{
 ally: Allocator,
 system: System,
 config: Config,
+endpoints: Endpoints,
 interfaces: std.ArrayList(?Interface),
 incoming: Queue(.in),
 outgoing: std.ArrayList(?Queue(.out)),

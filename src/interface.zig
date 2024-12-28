@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const Id = u8;
+
 const Self = @This();
 
 access_code: ?[]const u8 = null,

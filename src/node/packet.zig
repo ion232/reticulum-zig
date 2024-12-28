@@ -1,5 +1,7 @@
 const std = @import("std");
-const Hash = @import("../crypto.zig").Hash;
+const endpoint = @import("../endpoint.zig");
+const crypto = @import("../crypto.zig");
+const Hash = crypto.Hash;
 
 pub const Builder = struct {};
 
@@ -149,12 +151,7 @@ pub const Header = packed struct {
             transport,
         };
 
-        pub const Endpoint = enum(u2) {
-            single,
-            group,
-            plain,
-            link,
-        };
+        pub const Method = endpoint.Method;
 
         pub const Purpose = enum(u2) {
             data,
@@ -168,7 +165,7 @@ pub const Header = packed struct {
     format: Flag.Format,
     context: Flag.Context,
     propagation: Flag.Propagation,
-    endpoint: Flag.Endpoint,
+    method: Flag.Method,
     purpose: Flag.Purpose,
     hops: u8,
 };

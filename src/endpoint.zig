@@ -1,38 +1,16 @@
-const std = @import("std");
-const Identity = @import("crypto.zig").Identity;
-
-const Self = @This();
-
-identity: Identity,
-direction: Direction,
-method: Method,
-application_name: []const u8,
-aspects: [][]const u8,
-
-pub fn init(
-    identity: Identity,
-    direction: Direction,
-    method: Method,
-    application_name: []const u8,
-    aspects: [][]const u8,
-) Self {
-    return .{
-        .identity = identity,
-        .direction = direction,
-        .method = method,
-        .application_name = application_name,
-        .aspects = aspects,
-    };
-}
+pub const Builder = @import("endpoint/Builder.zig");
+pub const Managed = @import("endpoint/Managed.zig");
+pub const Unmanaged = @import("endpoint/Unmanaged.zig");
+pub const Store = @import("endpoint/Store.zig");
 
 pub const Direction = enum {
     in,
     out,
 };
 
-pub const Method = enum {
-    plain,
+pub const Method = enum(u2) {
     single,
     group,
+    plain,
     link,
 };
