@@ -10,11 +10,11 @@ const Self = @This();
 
 ally: Allocator,
 identities: std.Arr,
-endpoints: Endpoints,
+table: Table,
 
 pub fn init(ally: Allocator) Self {
     return .{
-        .endpoints = Endpoints.init(ally),
+        .table = Table.init(ally),
     };
 }
 
@@ -30,7 +30,7 @@ pub fn decrypt(endpoint: Endpoint, data: []u8) void {}
 
 pub fn sign(endpoint: Endpoint, data: []u8) [16]u8 {}
 
-const Endpoints = struct {
+const Table = struct {
     const Entry = struct {
         timestamp: i64,
         expiry_time: i64,

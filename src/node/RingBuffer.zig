@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-fn RingBuffer(comptime T: type) type {
+pub fn RingBuffer(comptime T: type) type {
     return struct {
         pub const Error = error{
             Full,

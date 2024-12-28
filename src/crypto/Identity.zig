@@ -1,7 +1,7 @@
 const X25519 = @import("X25519.zig");
 const Ed25519 = @import("Ed25519.zig");
 const Hash = @import("Hash.zig");
-const Rng = @import("src/System.zig").Rng;
+const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
 

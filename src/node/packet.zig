@@ -1,5 +1,5 @@
 const std = @import("std");
-const Hash = @import("src/crypto.zig").Hash;
+const Hash = @import("../crypto.zig").Hash;
 
 pub const Builder = struct {};
 

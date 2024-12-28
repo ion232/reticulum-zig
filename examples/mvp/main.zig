@@ -1,16 +1,12 @@
 const std = @import("std");
-const reticulum = @import("reticulum");
-
-const Os = reticulum.System.Os;
-const Node = reticulum.Node;
+const rt = @import("reticulum");
 
 pub fn main() !void {
-    const gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ally = gpa.allocator();
-    const os = try Os.init();
-    const system = os.system();
+    var os = try rt.System.Os.init();
 
-    const node = Node.init(ally, system, .{});
+    const node = try rt.Node.init(ally, os.system(), .{});
     const interface_id = try node.addInterface(.{});
     try node.push(interface_id, .{});
     try node.process();

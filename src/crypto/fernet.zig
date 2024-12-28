@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const Aes = @import("Aes.zig");
-const Rng = @import("src/System.zig").Rng;
+const Rng = @import("../System.zig").Rng;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 
 const Self = @This();
@@ -10,27 +10,29 @@ pub const Error = error{
     VerificationFailed,
 };
 
-signing_key: [Aes.block_length]u8,
-encryption_key: [Aes.block_length]u8,
+pub const SigningKey = [Aes.block_length]u8;
+pub const EncryptionKey = [Aes.block_length]u8;
 
-pub fn init(signing_key: u128, encryption_key: u128) Self {
-    var signing_bytes: [Aes.block_length]u8 = undefined;
-    var encryption_bytes: [Aes.block_length]u8 = undefined;
+signing_key: SigningKey,
+encryption_key: EncryptionKey,
 
-    const endian = builtin.cpu.arch.endian();
-    std.mem.writeInt(u128, &signing_bytes, signing_key, endian);
-    std.mem.writeInt(u128, &encryption_bytes, encryption_key, endian);
-
+pub fn init(signing_key: SigningKey, encryption_key: EncryptionKey) Self {
     return .{
-        .signing_key = signing_bytes,
-        .encryption_key = encryption_bytes,
+        .signing_key = signing_key,
+        .encryption_key = encryption_key,
     };
 }
 
 pub fn random(rng: Rng) Self {
-    const signing_key = rng.int(u128);
-    const encryption_key = rng.int(u128);
-    return init(signing_key, encryption_key);
+    const self = Self{
+        .signing_key = undefined,
+        .encryption_key = undefined,
+    };
+
+    rng.bytes(self.signing_key);
+    rng.bytes(self.encryption_key);
+
+    return self;
 }
 
 pub fn encrypt(self: Self, rng: Rng, plaintext: []const u8, buffer: []u8) Token {
