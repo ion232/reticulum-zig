@@ -5,15 +5,16 @@ const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
 
+pub const Ratchet = X25519.SecretKey;
 pub const PublicKeys = Public;
 pub const Public = struct {
     dh: X25519.PublicKey,
-    sign: Ed25519.PublicKey,
+    signature: Ed25519.PublicKey,
 };
 
 const Secret = struct {
     dh: X25519.SecretKey,
-    sign: Ed25519.SecretKey,
+    signature: Ed25519.SecretKey,
 };
 
 public: Public,
@@ -28,10 +29,6 @@ pub fn from_public(public: Public) Self {
     };
 }
 
-pub fn has_secret(self: *Self) bool {
-    return self.secret != null;
-}
-
 pub fn random(rng: *Rng) Self {
     const dh_seed: [X25519.seed_length]u8 = undefined;
     const signature_seed: [Ed25519.KeyPair.seed_length]u8 = undefined;
@@ -40,15 +37,15 @@ pub fn random(rng: *Rng) Self {
     rng.bytes(&signature_seed);
 
     const dh = X25519.KeyPair.create(dh_seed);
-    const sign = Ed25519.KeyPair.create(signature_seed);
+    const signature = Ed25519.KeyPair.create(signature_seed);
 
     const public = Public{
         .dh = dh.public_key,
-        .sign = sign.public_key,
+        .signature = signature.public_key,
     };
     const secret = Secret{
         .dh = dh.secret_key,
-        .sign = sign.secret_key,
+        .signature = signature.secret_key,
     };
 
     return .{
@@ -56,6 +53,18 @@ pub fn random(rng: *Rng) Self {
         .secret = secret,
         .hash = make_hash(public),
     };
+}
+
+pub fn encrypt(self: *const Self, data: []u8) void {}
+
+pub fn decrypt(self: *const Self, data: []u8) void {}
+
+pub fn sign(self: *const Self, data: []u8) [16]u8 {
+    Ed25519.Signer.
+}
+
+pub fn has_secret(self: *Self) bool {
+    return self.secret != null;
 }
 
 fn make_hash(public: *const Public) Hash {

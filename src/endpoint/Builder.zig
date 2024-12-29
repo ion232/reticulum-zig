@@ -6,10 +6,11 @@ const Allocator = std.mem.Allocator;
 const Identity = crypto.Identity;
 const Direction = endpoint.Direction;
 const Method = endpoint.Method;
+const Hash = crypto.Hash;
 const Managed = @import("Managed.zig");
 
 const Self = @This();
-const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 2);
+const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 3);
 
 pub const Error = error{
     Incomplete,
@@ -30,30 +31,35 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn identity(self: *Self, new_identity: Identity) *Self {
+pub fn set_identity(self: *Self, identity: Identity) *Self {
     self.fields.set(0);
-    self.identity = new_identity;
+    self.identity = identity;
+    return self;
 }
 
-pub fn direction(self: *Self, new_direction: Direction) *Self {
+pub fn set_direction(self: *Self, direction: Direction) *Self {
     self.fields.set(1);
-    self.direction = new_direction;
+    self.direction = direction;
+    return self;
 }
 
-pub fn method(self: *Self, new_method: Method) *Self {
+pub fn set_method(self: *Self, method: Method) *Self {
     self.fields.set(2);
-    self.method = new_method;
+    self.method = method;
+    return self;
 }
 
-pub fn application_name(self: *Self, new_application_name: []const u8) *Self {
+pub fn set_application_name(self: *Self, application_name: []const u8) *Self {
     self.fields.set(3);
-    self.application_name = new_application_name;
+    self.application_name = application_name;
+    return self;
 }
 
-pub fn add_aspect(self: *Self, new_aspect: []const u8) *Self {
-    const aspect = std.ArrayList(u8).init(self.ally);
-    aspect.appendSlice(new_aspect);
-    self.aspects.append(aspect);
+pub fn add_aspect(self: *Self, aspect: []const u8) *Self {
+    const managed_aspect = std.ArrayList(u8).init(self.ally);
+    managed_aspect.appendSlice(aspect);
+    self.aspects.append(managed_aspect);
+    return self;
 }
 
 pub fn build(self: *Self) Error!Managed {
@@ -65,6 +71,7 @@ pub fn build(self: *Self) Error!Managed {
             .method = self.method,
             .application_name = self.application_name,
             .aspects = self.aspects,
+            .hash = Hash.from_items(.{}),
         };
     }
 

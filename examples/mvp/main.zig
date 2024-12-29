@@ -8,12 +8,14 @@ pub fn main() !void {
     var system = os.system();
 
     const identity = rt.crypto.Identity.random(&system.rng);
-    const endpoint = rt.Endpoint.init(
-        identity,
-        .in,
-        .single,
-        "rt-zig-mvp",
-    );
+    const endpoint = try rt.endpoint.Builder.init(ally)
+        .set_identity(identity)
+        .set_direction(.in)
+        .set_method(.single)
+        .set_application_name("mvp-example")
+        .add_aspect("one")
+        .build();
+
     const node = try rt.Node.init(ally, system, .{});
 
     const interface_id = try node.addInterface(.{});
