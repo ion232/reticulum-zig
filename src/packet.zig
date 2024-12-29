@@ -1,5 +1,15 @@
 const std = @import("std");
-const endpoint = @import("endpoint.zig");
+const Endpoint = @import("endpoint.zig").Managed;
+
+const Allocator = std.mem.Allocator;
+const Builder = @import("packet/Builder.zig");
+const Packet = Managed;
+const Managed = @import("packet/Managed.zig");
+const Unmanaged = @import("packet/Unmanaged.zig");
+
+pub fn announce(ally: Allocator, endpoint: Endpoint) !Packet {
+    // Make the announce packet.
+}
 
 pub const Header = packed struct {
     pub const Flag = struct {

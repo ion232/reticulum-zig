@@ -1,9 +1,9 @@
 const std = @import("std");
+const interface = @import("interface.zig");
 
 const Allocator = std.mem.Allocator;
 const Endpoint = @import("endpoint.zig").Endpoint;
 const EndpointStore = @import("endpoint/Store.zig");
-const Interface = @import("Interface.zig");
 const Hash = @import("crypto.zig").Hash;
 const Options = @import("node/Options.zig");
 const Packet = @import("node/Packet.zig");
@@ -71,14 +71,14 @@ pub fn process(self: *Self) Error!void {
     }
 }
 
-pub fn push(self: *Self, id: Interface.Id, packet: Packet) !void {
+pub fn push(self: *Self, id: interface.Id, packet: Packet) !void {
     try self.incoming.push(.{
         .packet = packet,
         .id = id,
     });
 }
 
-pub fn pop(self: *Self, id: Interface.Id) Error!?[]const u8 {
+pub fn pop(self: *Self, id: interface.Id) Error!?[]const u8 {
     if (self.interfaces.items.len >= id) {
         return Error.InvalidInterfaceId;
     }
@@ -94,7 +94,7 @@ pub fn pop(self: *Self, id: Interface.Id) Error!?[]const u8 {
     return Error.InvalidInterfaceId;
 }
 
-pub fn addInterface(self: *Self, interface: Interface) Error!Interface.Id {
+pub fn addInterface(self: *Self, interface: Interface) Error!interface.Id {
     if (self.interfaces.items.len == self.interfaces.capacity) {
         return Error.TooManyInterfaces;
     }
@@ -119,7 +119,7 @@ pub fn addInterface(self: *Self, interface: Interface) Error!Interface.Id {
     return id;
 }
 
-pub fn removeInterface(self: *Self, id: Interface.Id) Error!void {
+pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
     if (id >= self.interfaces.items.len or id >= self.outgoing.items.len) {
         return Error.InvalidInterfaceId;
     }
@@ -143,7 +143,7 @@ fn Queue(comptime direction: Endpoint.Direction) type {
 
 const Element = struct {
     const In = struct {
-        id: Interface.Id,
+        id: interface.Id,
         packet: Packet,
     };
     const Out = struct {

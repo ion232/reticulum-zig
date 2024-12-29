@@ -1,7 +1,6 @@
 pub const Builder = @import("endpoint/Builder.zig");
-pub const Endpoint = ManagedEndpoint;
-pub const ManagedEndpoint = @import("endpoint/Managed.zig");
-pub const UnmanagedEndpoint = @import("endpoint/Unmanaged.zig");
+pub const Managed = @import("endpoint/Managed.zig");
+pub const Unmanaged = @import("endpoint/Unmanaged.zig");
 pub const Store = @import("endpoint/Store.zig");
 
 pub const Direction = enum {

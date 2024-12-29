@@ -4,7 +4,7 @@ const crypto = @import("../crypto.zig");
 const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
-const Bytes = @import("../internal/Bytes.zig");
+const Bytes = std.ArrayList(u8);
 const Managed = @import("Managed.zig");
 const Header = packet.Header;
 const Context = packet.Context;

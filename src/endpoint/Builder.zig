@@ -3,7 +3,7 @@ const crypto = @import("../crypto.zig");
 const endpoint = @import("../endpoint.zig");
 
 const Allocator = std.mem.Allocator;
-const Bytes = @import("../internal/Bytes.zig");
+const Bytes = std.ArrayList(u8);
 const Identity = crypto.Identity;
 const Direction = endpoint.Direction;
 const Method = endpoint.Method;
