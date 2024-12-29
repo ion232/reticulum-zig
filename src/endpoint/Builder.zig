@@ -3,6 +3,7 @@ const crypto = @import("../crypto.zig");
 const endpoint = @import("../endpoint.zig");
 
 const Allocator = std.mem.Allocator;
+const Bytes = @import("../internal/Bytes.zig");
 const Identity = crypto.Identity;
 const Direction = endpoint.Direction;
 const Method = endpoint.Method;
@@ -12,22 +13,22 @@ const Managed = @import("Managed.zig");
 const Self = @This();
 const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 3);
 
-pub const Error = error{
-    Incomplete,
-};
+pub const Error = error{Incomplete};
 
 ally: Allocator,
 fields: Fields,
 identity: Identity = undefined,
 direction: Direction = undefined,
 method: Method = undefined,
-application_name: *std.ArrayList(u8) = undefined,
-aspects: *std.ArrayList(std.ArrayList(u8)) = undefined,
+application_name: Bytes,
+aspects: std.ArrayList(Bytes),
 
 pub fn init(ally: Allocator) Self {
     return Self{
         .ally = ally,
         .fields = Fields.initEmpty(),
+        .application_name = Bytes.init(ally),
+        .aspects = Bytes.init(ally),
     };
 }
 
@@ -51,12 +52,13 @@ pub fn set_method(self: *Self, method: Method) *Self {
 
 pub fn set_application_name(self: *Self, application_name: []const u8) *Self {
     self.fields.set(3);
-    self.application_name = application_name;
+    self.application_name = Bytes.init(self.ally);
+    self.application_name.appendSlice(application_name);
     return self;
 }
 
-pub fn add_aspect(self: *Self, aspect: []const u8) *Self {
-    const managed_aspect = std.ArrayList(u8).init(self.ally);
+pub fn append_aspect(self: *Self, aspect: []const u8) *Self {
+    const managed_aspect = Bytes.init(self.ally);
     managed_aspect.appendSlice(aspect);
     self.aspects.append(managed_aspect);
     return self;

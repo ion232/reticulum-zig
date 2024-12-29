@@ -5,9 +5,9 @@ const Endpoint = @import("endpoint.zig").Endpoint;
 const EndpointStore = @import("endpoint/Store.zig");
 const Interface = @import("Interface.zig");
 const Hash = @import("crypto.zig").Hash;
-const Config = @import("node/Config.zig");
+const Options = @import("node/Options.zig");
 const Packet = @import("node/Packet.zig");
-const RingBuffer = @import("node/RingBuffer.zig").RingBuffer;
+const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
 const System = @import("System.zig");
 
 const Self = @This();
@@ -20,20 +20,20 @@ pub const Error = error{
 
 ally: Allocator,
 system: System,
-config: Config,
+options: Options,
 endpoint_store: EndpointStore,
 interfaces: std.ArrayList(?Interface),
 incoming: Queue(.in),
 outgoing: std.ArrayList(?Queue(.out)),
 routes: std.StringHashMap(Hash),
 
-pub fn init(ally: Allocator, system: System, config: Config) Allocator.Error!Self {
+pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!Self {
     return .{
         .ally = ally,
         .system = system,
-        .config = config,
-        .incoming = try Queue(.in).init(ally, config.max_incoming_packets),
-        .outgoing = std.ArrayList(Queue(.out)).init(ally),
+        .options = options,
+        .incoming = try Queue(.in).init(ally, options.max_incoming_packets),
+        .outgoing = std.ArrayList(?Queue(.out)).init(ally),
     };
 }
 
@@ -143,8 +143,8 @@ fn Queue(comptime direction: Endpoint.Direction) type {
 
 const Element = struct {
     const In = struct {
-        packet: Packet,
         id: Interface.Id,
+        packet: Packet,
     };
     const Out = struct {
         data: []const u8,

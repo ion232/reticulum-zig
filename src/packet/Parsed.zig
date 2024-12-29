@@ -3,8 +3,6 @@ const endpoint = @import("../endpoint.zig");
 const crypto = @import("../crypto.zig");
 const Hash = crypto.Hash;
 
-pub const Builder = struct {};
-
 pub const Packet = struct {
     const Self = @This();
 
@@ -94,82 +92,3 @@ pub const Packet = struct {
         return total_size;
     }
 };
-
-pub const Endpoints = union(Header.Flag.Format) {
-    normal: struct {
-        endpoint: []const u8,
-    },
-    transport: struct {
-        transport_id: []const u8,
-        endpoint: []const u8,
-    },
-};
-
-pub const Context = enum(u8) {
-    none,
-    resource,
-    resource_advertisement,
-    resource_request,
-    resource_hashmap_update,
-    resource_proof,
-    resource_initiator_cancel,
-    resource_receiver_cancel,
-    cache_request,
-    request,
-    response,
-    path_response,
-    command,
-    command_status,
-    link_channel,
-    keep_alive = 250,
-    link_identify,
-    link_close,
-    link_proof,
-    link_request_rtt,
-    link_request_proof,
-};
-
-pub const Header = packed struct {
-    pub const Flag = struct {
-        pub const Ifac = enum(u1) {
-            open,
-            authenticated,
-        };
-
-        pub const Format = enum(u1) {
-            normal,
-            transport,
-        };
-
-        pub const Context = enum(u1) {
-            off,
-            on,
-        };
-
-        pub const Propagation = enum(u1) {
-            broadcast,
-            transport,
-        };
-
-        pub const Method = endpoint.Method;
-
-        pub const Purpose = enum(u2) {
-            data,
-            announce,
-            link_request,
-            proof,
-        };
-    };
-
-    ifac: Flag.Ifac,
-    format: Flag.Format,
-    context: Flag.Context,
-    propagation: Flag.Propagation,
-    method: Flag.Method,
-    purpose: Flag.Purpose,
-    hops: u8,
-};
-
-test "Header size" {
-    try std.testing.expect(@sizeOf(Header) == 2);
-}

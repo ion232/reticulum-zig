@@ -3,7 +3,7 @@ const rt = @import("reticulum");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
+    const ally = std.heap.ThreadSafeAllocator{ .child_allocator = gpa.allocator() };
     var os = try rt.System.Os.init();
     var system = os.system();
 
@@ -14,6 +14,9 @@ pub fn main() !void {
         .set_method(.single)
         .set_application_name("mvp-example")
         .add_aspect("one")
+        .build();
+    const packet = rt.packet.Builder(ally)
+        .to_endpoint(endpoint)
         .build();
 
     const node = try rt.Node.init(ally, system, .{});
