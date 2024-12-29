@@ -22,7 +22,7 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn add_endpoint(self: *Self, endpoint: Endpoint) Allocator.Error!void {
+pub fn add(self: *Self, endpoint: Endpoint) Allocator.Error!void {
     try self.entries.put(endpoint.hash.bytes[0..], Entry{
         .endpoint = endpoint,
     });

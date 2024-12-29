@@ -1,11 +1,12 @@
 const std = @import("std");
-const Endpoint = @import("endpoint.zig").Managed;
 
 const Allocator = std.mem.Allocator;
-const Builder = @import("packet/Builder.zig");
-const Packet = Managed;
-const Managed = @import("packet/Managed.zig");
-const Unmanaged = @import("packet/Unmanaged.zig");
+const Endpoint = @import("endpoint.zig").Managed;
+const EndpointMethod = @import("endpoint.zig").Method;
+
+pub const Builder = @import("packet/Builder.zig");
+pub const Managed = @import("packet/Managed.zig");
+pub const Packet = Managed;
 
 pub fn announce(ally: Allocator, endpoint: Endpoint) !Packet {
     // Make the announce packet.
@@ -33,7 +34,7 @@ pub const Header = packed struct {
             transport,
         };
 
-        pub const Method = endpoint.Method;
+        pub const Method = EndpointMethod;
 
         pub const Purpose = enum(u2) {
             data,
