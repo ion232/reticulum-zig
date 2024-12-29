@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const Endpoint = @import("endpoint.zig").Endpoint;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
+const InterfaceEngine = interface.Engine;
 const Options = @import("node/Options.zig");
 const Packet = @import("node/Packet.zig");
 const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
@@ -22,9 +23,8 @@ ally: Allocator,
 system: System,
 options: Options,
 endpoint_store: EndpointStore,
-interfaces: std.ArrayList(?Interface),
-incoming: Queue(.in),
-outgoing: std.ArrayList(?Queue(.out)),
+interface_engine: InterfaceEngine,
+incoming: std.RingBuffer(Element.In),
 routes: std.StringHashMap(Hash),
 
 pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!Self {
@@ -92,40 +92,6 @@ pub fn pop(self: *Self, id: interface.Id) Error!?[]const u8 {
     }
 
     return Error.InvalidInterfaceId;
-}
-
-pub fn addInterface(self: *Self, interface: Interface) Error!interface.Id {
-    if (self.interfaces.items.len == self.interfaces.capacity) {
-        return Error.TooManyInterfaces;
-    }
-
-    const queue = Queue(.out).init(
-        self.ally,
-        self.config.max_outgoing_packets,
-    );
-
-    for (0.., self.interfaces.items) |id, *entry| {
-        if (entry.* == null) {
-            entry.* = interface;
-            self.outgoing.items[id] = queue;
-            return id;
-        }
-    }
-
-    const id = self.interfaces.items.len;
-    try self.interfaces.append(interface);
-    try self.outgoing.append(queue);
-
-    return id;
-}
-
-pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
-    if (id >= self.interfaces.items.len or id >= self.outgoing.items.len) {
-        return Error.InvalidInterfaceId;
-    }
-    self.interfaces[id] = null;
-    self.outgoing[id].deinit();
-    self.outgoing[id] = null;
 }
 
 fn shouldDrop(self: *Self, packet: *Packet) bool {
