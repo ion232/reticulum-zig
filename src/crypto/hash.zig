@@ -7,13 +7,13 @@ pub const long_length: usize = Sha256.digest_length;
 pub const short_length: usize = long_length / 2;
 pub const name_length: usize = 10;
 
-pub const LongHash = [long_length]u8;
-pub const ShortHash = [short_length]u8;
-pub const NameHash = [name_length]u8;
+pub const Long = [long_length]u8;
+pub const Short = [short_length]u8;
+pub const Name = [name_length]u8;
 
 bytes: [long_length]u8,
 
-pub fn from_long(hash: LongHash) Self {
+pub fn from_long(hash: Long) Self {
     return .{
         .bytes = hash,
     };
@@ -53,14 +53,14 @@ pub fn hex(self: *const Self) [2 * long_length]u8 {
     return std.fmt.bytesToHex(self.bytes, .lower);
 }
 
-pub fn long(self: *const Self) *const LongHash {
+pub fn long(self: *const Self) *const Long {
     return self.bytes[0..long_length];
 }
 
-pub fn short(self: *const Self) *const ShortHash {
+pub fn short(self: *const Self) *const Short {
     return self.bytes[0..short_length];
 }
 
-pub fn name(self: *const Self) *const NameHash {
+pub fn name(self: *const Self) *const Name {
     return self.bytes[0..name_length];
 }

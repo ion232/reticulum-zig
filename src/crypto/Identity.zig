@@ -56,9 +56,9 @@ pub fn random(rng: *Rng) Self {
     };
 }
 
-pub fn encrypt(self: *const Self, data: []u8) void {}
+// pub fn encrypt(self: *const Self, data: []u8) void {}
 
-pub fn decrypt(self: *const Self, data: []u8) void {}
+// pub fn decrypt(self: *const Self, data: []u8) void {}
 
 pub fn sign(self: *const Self, data: []u8) !Ed25519.Signature {
     if (self.secret) |s| {

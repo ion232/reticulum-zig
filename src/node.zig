@@ -121,19 +121,20 @@ fn process_incoming(self: *Self, now: i64) !void {
 
     header.hops += 1;
 
+    var is_valid = try packet.validate();
+    if (!is_valid) {
+        return;
+    }
+
     if (header.purpose == .announce) {
-        const endpoint_hash = switch (packet.endpoints) {
-            .normal => |*n| n.endpoint,
-            .transport => |*t| t.endpoint,
-        };
-        const next_hop = switch (packet.endpoints) {
-            .normal => |*n| n.endpoint,
-            .transport => |*t| t.transport_id,
-        };
+        const endpoint_hash = packet.endpoints.endpoint();
+        const next_hop = packet.endpoints.next_hop();
 
-        if (packet.validate_announce()) {}
+        // TODO: Check for hash collisions I suppose.
+        // TODO: Remember packet.
+        // TODO: Remember ratchet.
 
-        try self.routes.put(endpoint_hash, .{
+        try self.routes.put(endpoint_hash, Route{
             .next_hop = next_hop,
             .interface_id = element.interface_id,
             .timestamp = now,
@@ -151,8 +152,10 @@ fn process_outgoing(self: *Self, now: i64) !void {
     const packet = &element.packet;
     _ = now;
 
-    if (self.interfaces.get(element.interface_id)) |i| {
-        i.send(packet);
+    const next_hop = packet.endpoints.next_hop();
+
+    if (self.interfaces.get(element.interface_id)) |engine| {
+        engine.
     }
 }
 
