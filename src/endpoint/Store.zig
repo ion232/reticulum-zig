@@ -11,15 +11,19 @@ const Hash = crypto.Hash;
 const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
-const Entries = std.StringHashMap(Entry);
 
 ally: Allocator,
-entries: Entries,
+entries: std.StringHashMap(Entry),
 
 pub fn init(ally: Allocator) Self {
     return .{
-        .entries = Entries.init(ally),
+        .entries = std.StringHashMap(Entry).init(ally),
     };
+}
+
+pub fn deinit(self: *Self) void {
+    self.entries.deinit();
+    self.* = undefined;
 }
 
 pub fn add(self: *Self, endpoint: Endpoint) Allocator.Error!void {

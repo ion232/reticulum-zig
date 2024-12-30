@@ -5,6 +5,7 @@ const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
 
+pub const Error = error{MissingSecretKey};
 pub const Ratchet = X25519.SecretKey;
 pub const PublicKeys = Public;
 pub const Public = struct {
@@ -36,8 +37,8 @@ pub fn random(rng: *Rng) Self {
     rng.bytes(&dh_seed);
     rng.bytes(&signature_seed);
 
-    const dh = X25519.KeyPair.create(dh_seed);
-    const signature = Ed25519.KeyPair.create(signature_seed);
+    const dh = try X25519.KeyPair.create(dh_seed);
+    const signature = try Ed25519.KeyPair.create(signature_seed);
 
     const public = Public{
         .dh = dh.public_key,
@@ -59,8 +60,17 @@ pub fn encrypt(self: *const Self, data: []u8) void {}
 
 pub fn decrypt(self: *const Self, data: []u8) void {}
 
-pub fn sign(self: *const Self, data: []u8) [16]u8 {
-    Ed25519.Signer.
+pub fn sign(self: *const Self, data: []u8) !Ed25519.Signature {
+    if (self.secret) |s| {
+        const key_pair = Ed25519.KeyPair{
+            .public_key = self.public.signature,
+            .secret_key = s.signature,
+        };
+        const no_noise = null;
+        return try key_pair.sign(data, no_noise);
+    }
+
+    return Error.MissingSecretKey;
 }
 
 pub fn has_secret(self: *Self) bool {

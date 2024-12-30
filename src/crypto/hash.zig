@@ -5,9 +5,11 @@ const Self = @This();
 
 pub const long_length: usize = Sha256.digest_length;
 pub const short_length: usize = long_length / 2;
+pub const name_length: usize = 10;
 
 pub const LongHash = [long_length]u8;
 pub const ShortHash = [short_length]u8;
+pub const NameHash = [name_length]u8;
 
 bytes: [long_length]u8,
 
@@ -17,7 +19,11 @@ pub fn from_long(hash: LongHash) Self {
     };
 }
 
-pub fn from_items(items: anytype) Self {
+pub fn hash_data(data: []const u8) Self {
+    return hash_items(.{ .data = data });
+}
+
+pub fn hash_items(items: anytype) Self {
     var hash = Self{ .bytes = undefined };
     var hasher = Sha256.init(.{});
 
@@ -25,6 +31,11 @@ pub fn from_items(items: anytype) Self {
         const value = @field(items, field.name);
         switch (@TypeOf(value)) {
             []const u8, []u8 => hasher.update(value),
+            []const std.ArrayList(u8) => |lists| {
+                for (lists) |l| {
+                    hasher.update(l.items);
+                }
+            },
             else => switch (@typeInfo(@TypeOf(value))) {
                 .Int => hasher.update(std.mem.asBytes(&value)),
                 .Array => |_| hasher.update(std.mem.sliceAsBytes(value[0..])),
@@ -48,4 +59,8 @@ pub fn long(self: *const Self) *const LongHash {
 
 pub fn short(self: *const Self) *const ShortHash {
     return self.bytes[0..short_length];
+}
+
+pub fn name(self: *const Self) *const NameHash {
+    return self.bytes[0..name_length];
 }

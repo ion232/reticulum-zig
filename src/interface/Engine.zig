@@ -1,27 +1,23 @@
 const std = @import("std");
 const interface = @import("../interface.zig");
+const units = @import("../units.zig");
+
 const Id = interface.Id;
 const Config = interface.Config;
 const Packet = @import("../packet.zig").Packet;
 const RingBuffer = @import("../internal/RingBuffer.zig").RingBuffer;
 
-pub const Target = union(enum) {
-    single: interface.Id,
-    all,
-};
-
 const Self = @This();
 
-queues: std.AutoHashMap(Id, u8),
-interfaces: std.AutoHashMap(Id, Config),
+access_code_size: usize,
 
 pub fn init() Self {}
 
-pub fn receive(id: Id) void {
+pub fn receive(id: Id, bit_rate: *const units.BitRate) void {
     //
 }
 
-pub fn send(target: Target, packet: Packet) void {
+pub fn send(packet: Packet) void {
     //
 }
 

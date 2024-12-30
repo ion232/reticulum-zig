@@ -22,10 +22,11 @@ ally: Allocator,
 system: System,
 options: Options,
 mutex: std.Thread.Mutex,
-endpoint_store: EndpointStore,
-interface_engines: std.AutoHashMap(interface.Id, *interface.Engine),
-incoming: std.RingBuffer(Element.In),
-routes: std.StringHashMap(Hash),
+endpoints: EndpointStore,
+interfaces: std.AutoHashMap(interface.Id, *interface.Engine),
+incoming: RingBuffer(Element.In),
+outgoing: RingBuffer(Element.Out),
+routes: std.StringHashMap(Route),
 current_interface_id: interface.Id,
 
 pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!Self {
@@ -34,18 +35,21 @@ pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!S
         .system = system,
         .options = options,
         .mutex = .{},
-        .endpoint_store = .{},
-        .interface_engines = std.AutoHashMap(interface.Id, *interface.Engine).init(ally),
-        .incoming = try std.RingBuffer(Element.In).init(ally, options.max_incoming_packets),
+        .endpoints = EndpointStore.init(ally),
+        .interfaces = std.AutoHashMap(interface.Id, *interface.Engine).init(ally),
+        .incoming = try RingBuffer(Element.In).init(ally, options.max_incoming_packets),
+        .outgoing = try RingBuffer(Element.In).init(ally, options.max_outgoing_packets),
         .routes = std.StringHashMap(Hash).init(ally),
         .current_interface_id = 0,
     };
 }
 
 pub fn deinit(self: *Self) void {
+    self.endpoints.deinit();
     self.interfaces.deinit();
     self.incoming.deinit(self.ally);
-    self.outgoing.deinit();
+    self.outgoing.deinit(self.ally);
+    self.routes.deinit();
     self.* = undefined;
 }
 
@@ -92,12 +96,17 @@ pub fn process(self: *Self) Error!void {
         self.mutex.unlock();
     }
 
-    const front = self.receiver.queue.peek();
+    const now = self.system.clock.monotonicTime();
+    self.process_incoming(now);
+    self.process_outgoing(now);
+}
+
+fn process_incoming(self: *Self, now: i64) !void {
+    const front = self.incoming.pop();
     if (front == null) {
         return;
     }
 
-    const now = self.system.clock.monotonicTime();
     const element = front.?;
     const packet = &element.packet;
     const header = &packet.header;
@@ -110,14 +119,40 @@ pub fn process(self: *Self) Error!void {
         return;
     }
 
-    _ = now;
     header.hops += 1;
 
     if (header.purpose == .announce) {
-        const destination_hash = switch (packet.endpoints) {
-            .normal => |*n| ,
-            .transport => |*t| ,
+        const endpoint_hash = switch (packet.endpoints) {
+            .normal => |*n| n.endpoint,
+            .transport => |*t| t.endpoint,
         };
+        const next_hop = switch (packet.endpoints) {
+            .normal => |*n| n.endpoint,
+            .transport => |*t| t.transport_id,
+        };
+
+        if (packet.validate_announce()) {}
+
+        try self.routes.put(endpoint_hash, .{
+            .next_hop = next_hop,
+            .interface_id = element.interface_id,
+            .timestamp = now,
+        });
+    }
+}
+
+fn process_outgoing(self: *Self, now: i64) !void {
+    const front = self.outgoing.pop();
+    if (front == null) {
+        return;
+    }
+
+    const element = front.?;
+    const packet = &element.packet;
+    _ = now;
+
+    if (self.interfaces.get(element.interface_id)) |i| {
+        i.send(packet);
     }
 }
 
@@ -155,12 +190,20 @@ fn shouldDrop(self: *Self, packet: *Packet) bool {
     return false;
 }
 
+const Route = struct {
+    next_hop: Hash,
+    interface_id: interface.Id,
+    timestamp: i64,
+    // More fields.
+};
+
 const Element = struct {
     const In = struct {
-        id: interface.Id,
+        interface_id: interface.Id,
         packet: Packet,
     };
     const Out = struct {
-        data: []const u8,
+        interface_id: interface.Id,
+        packet: Packet,
     };
 };

@@ -8,10 +8,6 @@ pub const Builder = @import("packet/Builder.zig");
 pub const Managed = @import("packet/Managed.zig");
 pub const Packet = Managed;
 
-pub fn announce(ally: Allocator, endpoint: Endpoint) !Packet {
-    // Make the announce packet.
-}
-
 pub const Header = packed struct {
     pub const Flag = struct {
         pub const Interface = enum(u1) {
@@ -25,8 +21,8 @@ pub const Header = packed struct {
         };
 
         pub const Context = enum(u1) {
-            off,
-            on,
+            none,
+            set,
         };
 
         pub const Propagation = enum(u1) {

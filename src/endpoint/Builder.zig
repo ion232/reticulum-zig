@@ -11,9 +11,13 @@ const Hash = crypto.Hash;
 const Managed = @import("Managed.zig");
 
 const Self = @This();
-const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 3);
+const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 4);
 
-pub const Error = error{Incomplete};
+pub const Error = error{
+    Incomplete,
+    InvalidName,
+    InvalidAspect,
+};
 
 ally: Allocator,
 fields: Fields,
@@ -65,7 +69,51 @@ pub fn append_aspect(self: *Self, aspect: []const u8) *Self {
 }
 
 pub fn build(self: *Self) Error!Managed {
+    errdefer {
+        self.application_name.clearAndFree();
+
+        for (self.aspects) |a| {
+            a.clearAndFree();
+        }
+
+        self.aspects.clearAndFree();
+    }
+
     if (self.fields.count() == self.fields.capacity()) {
+        const name_hash = blk: {
+            // TODO: Do this incrementally without copying. Needs to handle the runtime number of dots.
+            const name_bytes = Bytes.init(self.ally);
+            try name_bytes.appendSlice(self.application_name.items);
+
+            errdefer {
+                name_bytes.deinit();
+            }
+
+            for (self.application_name.items) |c| {
+                if (c == '.') {
+                    return Error.InvalidName;
+                }
+            }
+
+            for (self.aspects) |a| {
+                for (a.items) |c| {
+                    if (c == '.') {
+                        return Error.InvalidAspect;
+                    }
+                }
+
+                try name_bytes.append('.');
+                try name_bytes.appendSlice(a.items);
+            }
+
+            break :blk Hash.hash_data(name_bytes);
+        };
+
+        const hash = Hash.hash_items(.{
+            .name_hash = name_hash.name(),
+            .identity_hash = self.identity.hash.short(),
+        });
+
         return Managed{
             .ally = self.ally,
             .identity = self.identity,
@@ -73,7 +121,8 @@ pub fn build(self: *Self) Error!Managed {
             .method = self.method,
             .application_name = self.application_name,
             .aspects = self.aspects,
-            .hash = Hash.from_items(.{}),
+            .hash = hash.short(),
+            .name_hash = name_hash.name(),
         };
     }
 
