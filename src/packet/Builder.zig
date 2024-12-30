@@ -1,17 +1,18 @@
 const std = @import("std");
-const endpoint = @import("../endpoint.zig");
 const crypto = @import("../crypto.zig");
 const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
 const Bytes = std.ArrayList(u8);
 const Managed = @import("Managed.zig");
+const Hash = crypto.Hash;
 const Header = packet.Header;
 const Context = packet.Context;
+const Endpoint = @import("../endpoint.zig").Managed;
 const Endpoints = Managed.Endpoints;
 
 const Self = @This();
-const Fields = std.bit_set.IntegerBitSet(std.meta.fields(Managed).len - 3);
+const Fields = std.bit_set.IntegerBitSet(2);
 
 pub const Error = error{Incomplete};
 
@@ -20,7 +21,7 @@ fields: Fields,
 header: Header = undefined,
 interface_access_code: Bytes,
 endpoints: Endpoints = undefined,
-context: Context = undefined,
+context: Context = 0,
 payload: Bytes,
 
 pub fn init(ally: Allocator) Self {
@@ -43,14 +44,26 @@ pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8)
     return self;
 }
 
-pub fn set_endpoints(self: *Self, endpoints: Endpoints) *Self {
+pub fn set_endpoint(self: *Self, endpoint_hash: Hash.Short) *Self {
     self.fields.set(1);
-    self.endpoints = endpoints;
+    self.endpoints = .{
+        .normal = .{ .endpoint = endpoint_hash },
+    };
+    return self;
+}
+
+pub fn set_transport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.Short) *Self {
+    self.fields.set(1);
+    self.endpoints = .{
+        .transport = .{
+            .endpoint = endpoint_hash,
+            .transport_id = transport_id,
+        },
+    };
     return self;
 }
 
 pub fn set_context(self: *Self, context: Context) *Self {
-    self.fields.set(2);
     self.context = context;
     return self;
 }

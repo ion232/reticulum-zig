@@ -1,5 +1,4 @@
 const std = @import("std");
-const endpoint = @import("../endpoint.zig");
 const crypto = @import("../crypto.zig");
 const packet = @import("../packet.zig");
 
@@ -56,6 +55,7 @@ pub fn validate(self: *Self) !bool {
 }
 
 // TODO: Make this take a Writer interface.
+// Make sure to encrypt the packet with the interface access code here.
 pub fn write(self: *Self, buffer: []u8) !void {
     if (buffer.len < self.size()) {
         return;

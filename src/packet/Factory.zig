@@ -60,6 +60,8 @@ pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
             return Error.InvalidBytesLength;
         }
 
+        // I need to decrypt the packet here.
+
         try interface_access_code.appendSlice(bytes[index .. index + access_code.len]);
         index += access_code.len;
     }

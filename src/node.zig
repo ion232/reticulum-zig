@@ -7,7 +7,6 @@ const Element = @import("node/Element.zig");
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
-const Hooks = @import("node/Hooks.zig");
 const Options = @import("node/Options.zig");
 const Packet = @import("packet.zig").Packet;
 const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
@@ -28,8 +27,6 @@ options: Options,
 mutex: std.Thread.Mutex,
 endpoints: EndpointStore,
 interfaces: std.AutoHashMap(interface.Id, *interface.Engine),
-incoming: ThreadSafeRingBuffer(Element.In),
-outgoing: RingBuffer(Element.Out),
 routes: std.StringHashMap(Route),
 current_interface_id: interface.Id,
 
@@ -41,40 +38,44 @@ pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!S
         .mutex = .{},
         .endpoints = EndpointStore.init(ally),
         .interfaces = std.AutoHashMap(interface.Id, *interface.Engine).init(ally),
-        .incoming = try RingBuffer(Element.In).init(ally, options.max_incoming_packets),
-        .outgoing = try RingBuffer(Element.In).init(ally, options.max_outgoing_packets),
         .routes = std.StringHashMap(Hash).init(ally),
         .current_interface_id = 0,
     };
 }
 
 pub fn deinit(self: *Self) void {
+    self.mutex.lock();
+
+    defer {
+        self.mutex.unlock();
+        self.* = undefined;
+    }
+
     self.endpoints.deinit();
     self.interfaces.deinit();
     self.incoming.deinit(self.ally);
     self.outgoing.deinit(self.ally);
     self.routes.deinit();
-    self.* = undefined;
 }
 
-pub fn addInterface(self: *Self, config: interface.Config) Error!Hooks {
+pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engine.Api {
     self.mutex.lock();
 
     defer {
         self.mutex.unlock();
     }
 
-    if (self.interface_engines.count() > self.options.max_interfaces) {
+    if (self.interfaces.count() > self.options.max_interfaces) {
         return Error.TooManyInterfaces;
     }
 
     const engine = try self.ally.create(interface.Engine);
     engine.* = interface.Engine.init(self.ally, config);
 
-    try self.interface_engines.put(self.current_interface_id, engine);
+    try self.interfaces.put(self.current_interface_id, engine);
     self.current_interface_id += 1;
 
-    return engine;
+    return engine.api();
 }
 
 pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
@@ -84,8 +85,8 @@ pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
         self.mutex.unlock();
     }
 
-    if (self.interface_engines.get(id)) |engine| {
-        engine.clear();
+    if (self.interfaces.get(id)) |engine| {
+        engine.deinit(self.ally);
         self.ally.destroy(engine);
         return;
     }
@@ -161,27 +162,6 @@ fn process_outgoing(self: *Self, now: i64) !void {
         }
     } else {
         // Modify the packet for transport.
-    }
-}
-
-pub fn receive(self: *Self, id: interface.Id, packet: Packet) !void {
-    try self.incoming.push(.{
-        .id = id,
-        .packet = packet,
-    });
-}
-
-pub fn send(self: *Self, id: interface.Id, packet: Packet) !void {
-    self.mutex.lock();
-
-    defer {
-        self.mutex.unlock();
-    }
-
-    // TODO: Processing code.
-
-    if (self.interface_engines.get(id)) |engine| {
-        engine.send(.{ .single = id }, packet);
     }
 }
 

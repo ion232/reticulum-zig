@@ -9,6 +9,7 @@ const Element = @import("../Node.zig").Element;
 const Endpoint = @import("../endpoint.zig").Managed;
 const Hash = @import("../crypto.zig").Hash;
 const Packet = @import("../packet.zig").Packet;
+const PacketBuilder = @import("../packet.zig").Builder;
 const PacketFactory = @import("../packet.zig").Factory;
 const RingBuffer = @import("../internal/RingBuffer.zig").RingBuffer;
 const ThreadSafeRingBuffer = @import("../internal/ThreadSafeRingBuffer.zig").ThreadSafeRingBuffer;
@@ -81,7 +82,7 @@ pub const Api = struct {
         self.send(packet);
     }
 
-    // pub fn data_out(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {}
+    // pub fn data(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {}
 
     pub fn deliver(self: *@This(), raw_bytes: []const u8) void {
         return self.deliverFn(self.ptr, raw_bytes);
@@ -94,4 +95,7 @@ pub const Api = struct {
     pub fn collect(self: *@This()) ?Packet {
         return self.collectFn(self.ptr);
     }
+
+    // Should I use this, or use the packet factory instead?
+    // pub fn builder(self: *@This()) PacketBuilder {}
 };
