@@ -9,6 +9,7 @@ const Hash = crypto.Hash;
 const Identity = crypto.Identity;
 
 pub const Builder = @import("packet/Builder.zig");
+pub const Factory = @import("packet/Factory.zig");
 pub const Managed = @import("packet/Managed.zig");
 pub const Packet = Managed;
 

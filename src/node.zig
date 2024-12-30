@@ -2,12 +2,16 @@ const std = @import("std");
 const interface = @import("interface.zig");
 
 const Allocator = std.mem.Allocator;
+const BitRate = @import("units.zig").BitRate;
+const Element = @import("node/Element.zig");
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
+const Hooks = @import("node/Hooks.zig");
 const Options = @import("node/Options.zig");
 const Packet = @import("packet.zig").Packet;
 const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
+const ThreadSafeRingBuffer = @import("internal/ThreadSafeRingBuffer.zig").ThreadSafeRingBuffer;
 const System = @import("System.zig");
 
 const Self = @This();
@@ -24,7 +28,7 @@ options: Options,
 mutex: std.Thread.Mutex,
 endpoints: EndpointStore,
 interfaces: std.AutoHashMap(interface.Id, *interface.Engine),
-incoming: RingBuffer(Element.In),
+incoming: ThreadSafeRingBuffer(Element.In),
 outgoing: RingBuffer(Element.Out),
 routes: std.StringHashMap(Route),
 current_interface_id: interface.Id,
@@ -53,7 +57,7 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn addInterface(self: *Self, config: interface.Config) Error!*interface.Engine {
+pub fn addInterface(self: *Self, config: interface.Config) Error!Hooks {
     self.mutex.lock();
 
     defer {
@@ -102,12 +106,7 @@ pub fn process(self: *Self) Error!void {
 }
 
 fn process_incoming(self: *Self, now: i64) !void {
-    const front = self.incoming.pop();
-    if (front == null) {
-        return;
-    }
-
-    const element = front.?;
+    const element = self.incoming.pop() orelse return;
     const packet = &element.packet;
     const header = &packet.header;
 
@@ -121,7 +120,7 @@ fn process_incoming(self: *Self, now: i64) !void {
 
     header.hops += 1;
 
-    var is_valid = try packet.validate();
+    const is_valid = try packet.validate();
     if (!is_valid) {
         return;
     }
@@ -135,41 +134,40 @@ fn process_incoming(self: *Self, now: i64) !void {
         // TODO: Remember ratchet.
 
         try self.routes.put(endpoint_hash, Route{
-            .next_hop = next_hop,
-            .interface_id = element.interface_id,
             .timestamp = now,
+            .interface_id = element.interface_id,
+            .next_hop = next_hop,
+            .hops = header.hops,
         });
     }
 }
 
 fn process_outgoing(self: *Self, now: i64) !void {
-    const front = self.outgoing.pop();
-    if (front == null) {
+    const element = self.outgoing.pop() orelse return;
+    const packet = element.packet;
+    _ = now;
+
+    const endpoint = packet.endpoints.endpoint();
+
+    if (packet.header.purpose == .announce) {
+        // Broadcast to all interfaces.
         return;
     }
 
-    const element = front.?;
-    const packet = &element.packet;
-    _ = now;
-
-    const next_hop = packet.endpoints.next_hop();
-
-    if (self.interfaces.get(element.interface_id)) |engine| {
-        engine.
+    const route = self.routes.get(endpoint) orelse return;
+    if (route.hops == 1) {
+        if (self.interfaces.get(element.interface_id)) |engine| {
+            engine.send(packet);
+        }
+    } else {
+        // Modify the packet for transport.
     }
 }
 
 pub fn receive(self: *Self, id: interface.Id, packet: Packet) !void {
-    // Could replace this by using a thread safe queue.
-    self.mutex.lock();
-
-    defer {
-        self.mutex.unlock();
-    }
-
     try self.incoming.push(.{
-        .packet = packet,
         .id = id,
+        .packet = packet,
     });
 }
 
@@ -194,19 +192,9 @@ fn shouldDrop(self: *Self, packet: *Packet) bool {
 }
 
 const Route = struct {
-    next_hop: Hash,
-    interface_id: interface.Id,
     timestamp: i64,
+    interface_id: interface.Id,
+    next_hop: Hash.Short,
+    hops: u8,
     // More fields.
-};
-
-const Element = struct {
-    const In = struct {
-        interface_id: interface.Id,
-        packet: Packet,
-    };
-    const Out = struct {
-        interface_id: interface.Id,
-        packet: Packet,
-    };
 };

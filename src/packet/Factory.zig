@@ -31,7 +31,6 @@ pub fn init(ally: Allocator, clock: Clock, rng: Rng, interface: *const Interface
     };
 }
 
-// TODO: Add err_defers to free memory on error.
 pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
     var index = 0;
     const header_size = @sizeOf(packet.Header);
@@ -52,6 +51,9 @@ pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
     }
 
     const interface_access_code = Bytes.init(self.ally);
+    errdefer {
+        interface_access_code.deinit();
+    }
 
     if (self.interface.access_code) |access_code| {
         if (bytes.len < index + access_code.len) {
@@ -74,6 +76,9 @@ pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
     const endpoints = switch (header.format) {
         .normal => blk: {
             const endpoint = Bytes.init(self.ally);
+            errdefer {
+                endpoint.deinit();
+            }
             try endpoint.appendSlice(bytes[index .. index + endpoints_size]);
             index += endpoints_size;
 
@@ -84,10 +89,16 @@ pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
         .transport => blk: {
             // TODO: Make this cleaner.
             const transport_id = Bytes.init(self.ally);
+            errdefer {
+                transport_id.deinit();
+            }
             try transport_id.appendSlice(bytes[index .. index + @sizeOf(Packet.Endpoints.Normal)]);
             index += @sizeOf(Packet.Endpoints.Normal);
 
             const endpoint = Bytes.init(self.ally);
+            errdefer {
+                endpoint.deinit();
+            }
             try endpoint.appendSlice(bytes[index .. index + @sizeOf(Packet.Endpoints.Normal)]);
             index += @sizeOf(Packet.Endpoints.Normal);
 
@@ -108,6 +119,9 @@ pub fn from_bytes(self: *Self, bytes: []const u8) !Packet {
     index += context_size;
 
     const payload = Bytes.init(self.ally);
+    errdefer {
+        payload.deinit();
+    }
     try payload.appendSlice(bytes[index..]);
 
     return Packet{
