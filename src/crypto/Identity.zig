@@ -83,7 +83,7 @@ pub fn has_secret(self: *Self) bool {
 
 fn make_hash(public: *const Public) Hash {
     return Hash.hash_items(.{
-        .dh = public.dh,
-        .signature = public.signature,
+        .dh = public.dh[0..],
+        .signature = public.signature.bytes[0..],
     });
 }

@@ -39,13 +39,13 @@ pub fn init(
     incoming: *Incoming,
     outgoing: *Outgoing,
     packet_factory: PacketFactory,
-) Self {
+) !Self {
     return Self{
         .ally = ally,
         .id = id,
         .incoming = incoming,
         .outgoing = outgoing,
-        .for_collection = RingBuffer(Packet).init(ally, config.max_held_packets),
+        .for_collection = try RingBuffer(Packet).init(ally, config.max_held_packets),
         .packet_factory = packet_factory,
         .bit_rate = config.initial_bit_rate,
     };
@@ -54,23 +54,23 @@ pub fn init(
 pub fn deliver_raw(ptr: *anyopaque, bytes: []const u8) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
     const packet = try self.packet_factory.from_bytes(bytes);
-    try deliver(packet);
+    try deliver(ptr, packet);
 }
 
 pub fn deliver(ptr: *anyopaque, packet: Packet) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
-    try self.incoming.push(packet);
+    try self.incoming.push(.{ .packet = packet });
 }
 
-pub fn send(ptr: *anyopaque, packet: Packet) void {
+pub fn send(ptr: *anyopaque, packet: Packet) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
-    try self.outgoing.push(packet);
+    try self.outgoing.push(.{ .packet = packet });
 }
 
 pub fn collect(ptr: *anyopaque, current_bit_rate: BitRate) ?Packet {
     const self: *Self = @ptrCast(@alignCast(ptr));
     self.bit_rate = current_bit_rate;
-    self.for_collection.pop();
+    return self.for_collection.pop();
 }
 
 pub fn api(self: *Self) Api {

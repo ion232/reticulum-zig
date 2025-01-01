@@ -17,6 +17,7 @@ entries: std.StringHashMap(Entry),
 
 pub fn init(ally: Allocator) Self {
     return .{
+        .ally = ally,
         .entries = std.StringHashMap(Entry).init(ally),
     };
 }

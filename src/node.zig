@@ -89,7 +89,7 @@ pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engin
     const packet_factory = PacketFactory.init(self.ally, self.system.clock, self.system.rng, config);
 
     const engine = try self.ally.create(interface.Engine);
-    engine.* = interface.Engine.init(self.ally, config, id, incoming, outgoing, packet_factory);
+    engine.* = try interface.Engine.init(self.ally, config, id, incoming, outgoing, packet_factory);
     try self.interfaces.put(id, engine);
 
     return engine.api();

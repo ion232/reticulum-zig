@@ -11,10 +11,12 @@ const Endpoint = @import("../endpoint.zig").Managed;
 const Builder = @import("Builder.zig");
 const Packet = @import("Managed.zig");
 
+// TODO: This definitely all needs tidying up.
+
 pub const Error = error{
     InvalidBytesLength,
     InvalidAuthentication,
-} || crypto.Identity.Error;
+} || crypto.Identity.Error || Builder.Error || Allocator.Error;
 const Self = @This();
 
 ally: Allocator,
@@ -32,15 +34,14 @@ pub fn init(ally: Allocator, clock: Clock, rng: Rng, interface: InterfaceConfig)
 }
 
 pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
-    // TODO: This definitely needs tidying up.
-    var index = 0;
+    var index: usize = 0;
     const header_size = @sizeOf(packet.Header);
 
     if (bytes.len < index + header_size) {
         return Error.InvalidBytesLength;
     }
 
-    const header: packet.Header = @bitCast(bytes[index .. index + header_size]);
+    const header: packet.Header = @bitCast(bytes[0..header_size].*);
     index += header_size;
 
     const both_auth = self.interface.access_code != null and header.interface == .authenticated;
@@ -51,7 +52,7 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
         return Error.InvalidAuthentication;
     }
 
-    const interface_access_code = Bytes.init(self.ally);
+    var interface_access_code = Bytes.init(self.ally);
     errdefer {
         interface_access_code.deinit();
     }
@@ -67,9 +68,9 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
         index += access_code.len;
     }
 
-    const endpoints_size = switch (header.format) {
-        .normal => @sizeOf(Packet.Endpoints.Normal),
-        .transport => @sizeOf(Packet.Endpoints.Transport),
+    const endpoints_size: usize = switch (header.format) {
+        .normal => @sizeOf(packet.Endpoints.Normal),
+        .transport => @sizeOf(packet.Endpoints.Transport),
     };
 
     if (bytes.len < index + endpoints_size) {
@@ -78,37 +79,31 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
 
     const endpoints = switch (header.format) {
         .normal => blk: {
-            const endpoint = Bytes.init(self.ally);
-            errdefer {
-                endpoint.deinit();
-            }
-            try endpoint.appendSlice(bytes[index .. index + endpoints_size]);
-            index += endpoints_size;
+            var endpoint: crypto.Hash.Short = undefined;
+            @memcpy(&endpoint, bytes[index .. index + endpoint.len]);
+            index += endpoint.len;
 
-            break :blk Packet.Endpoints{ .normal = .{
+            const endpoints = packet.Endpoints{ .normal = .{
                 .endpoint = endpoint,
             } };
+
+            break :blk endpoints;
         },
         .transport => blk: {
-            // TODO: Make this cleaner.
-            const transport_id = Bytes.init(self.ally);
-            errdefer {
-                transport_id.deinit();
-            }
-            try transport_id.appendSlice(bytes[index .. index + @sizeOf(Packet.Endpoints.Normal)]);
-            index += @sizeOf(Packet.Endpoints.Normal);
+            var endpoint: crypto.Hash.Short = undefined;
+            @memcpy(&endpoint, bytes[index .. index + endpoint.len]);
+            index += endpoint.len;
 
-            const endpoint = Bytes.init(self.ally);
-            errdefer {
-                endpoint.deinit();
-            }
-            try endpoint.appendSlice(bytes[index .. index + @sizeOf(Packet.Endpoints.Normal)]);
-            index += @sizeOf(Packet.Endpoints.Normal);
+            var transport_id: crypto.Hash.Short = undefined;
+            @memcpy(&transport_id, bytes[index .. index + transport_id.len]);
+            index += transport_id.len;
 
-            break :blk Packet.Endpoints{ .transport = .{
+            const endpoints = packet.Endpoints{ .transport = .{
                 .transport_id = transport_id,
                 .endpoint = endpoint,
             } };
+
+            break :blk endpoints;
         },
     };
 
@@ -118,7 +113,8 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
         return Error.InvalidBytesLength;
     }
 
-    const context = bytes[index .. index + context_size];
+    // TODO: Figure out how to do this properly.
+    const context: packet.Context = @enumFromInt(bytes[index .. index + context_size][0]);
     index += context_size;
 
     const payload: packet.Payload = switch (header.purpose) {
@@ -131,19 +127,22 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
                 return Error.InvalidBytesLength;
             }
 
-            announce.public.dh = bytes[index .. index + announce.public.dh.len];
+            @memcpy(&announce.public.dh, bytes[index .. index + announce.public.dh.len]);
             index += announce.public.dh.len;
-            announce.public.signature = try crypto.Ed25519.PublicKey.fromBytes(bytes[index .. index + announce.public.signature.bytes.len]);
+            @memcpy(&announce.public.signature.bytes, bytes[index .. index + announce.public.signature.bytes.len]);
+            announce.public.signature = try crypto.Ed25519.PublicKey.fromBytes(announce.public.signature.bytes);
             index += announce.public.signature.bytes.len;
-            announce.noise = bytes[index .. index + announce.noise.len];
+            @memcpy(&announce.noise, bytes[index .. index + announce.noise.len]);
             index += announce.noise.len;
             announce.timestamp = std.mem.bytesToValue(u40, bytes[index .. index + @sizeOf(Announce.Timestamp)]);
             index += @sizeOf(Announce.Timestamp);
-            announce.signature = Signature.fromBytes(bytes[index .. index + Signature.encoded_length]);
+            var signature_bytes: [Signature.encoded_length]u8 = undefined;
+            @memcpy(&signature_bytes, bytes[index .. index + Signature.encoded_length]);
+            announce.signature = Signature.fromBytes(signature_bytes);
             index += Signature.encoded_length;
 
             var application_data = Bytes.init(self.ally);
-            application_data.appendSlice(bytes[index..]);
+            try application_data.appendSlice(bytes[index..]);
             announce.application_data = application_data;
 
             break :blk announce;
@@ -201,7 +200,7 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
         _ = try builder.set_interface_access_code(interface_access_code);
     }
 
-    return builder
+    return try builder
         .set_endpoint(endpoint.hash.short().*)
         .set_payload(.{ .announce = announce })
         .build();

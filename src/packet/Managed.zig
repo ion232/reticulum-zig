@@ -43,8 +43,8 @@ pub fn validate(self: *Self) !bool {
 
             const identity = crypto.Identity.from_public(a.public);
             const expected_hash = Hash.hash_items(.{
-                .name_hash = a.name_hash,
-                .public_hash = identity.hash.short(),
+                .name_hash = a.name_hash[0..],
+                .public_hash = identity.hash.short()[0..],
             });
 
             const matching_hashes = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);

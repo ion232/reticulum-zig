@@ -26,11 +26,11 @@ pub fn RingBuffer(comptime T: type) type {
         }
 
         pub fn push(self: *Self, element: T) Error!void {
-            try self.ring_buffer.writeSlice(std.mem.bytesAsSlice(u8, element));
+            try self.ring_buffer.writeSlice(std.mem.asBytes(element));
         }
 
         pub fn pop(self: *Self) ?T {
-            const element: T = undefined;
+            var element: T = undefined;
             self.ring_buffer.readFirst(std.mem.asBytes(&element), @sizeOf(T)) catch return null;
             return element;
         }
