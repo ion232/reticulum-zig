@@ -4,10 +4,10 @@ const rt = @import("reticulum");
 const Framework = @import("Framework.zig");
 
 pub fn main() !void {
-    const gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const thread_safe_gpa = std.heap.ThreadSafeAllocator{ .child_allocator = gpa.allocator() };
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var thread_safe_gpa = std.heap.ThreadSafeAllocator{ .child_allocator = gpa.allocator() };
     const ally = thread_safe_gpa.allocator();
-    const f = Framework.init(ally);
+    var f = Framework.init(ally, .{});
     const names = [_][]const u8{ "A", "B", "C" };
 
     for (names) |name| {
@@ -19,15 +19,15 @@ pub fn main() !void {
 
     for (names) |name| {
         const n = f.get_node(name).?;
-        const e = f.add_endpoint(name).?;
-        try n.api.announce(e, name);
+        const endpoint = try f.add_endpoint(name);
+        try n.api.announce(&endpoint, name);
         f.clock.advance(200, .ms);
-        f.process();
+        try f.process();
     }
 
     const c = f.get_node("C").?;
 
-    while (c.api.collect()) |packet| {
+    while (c.api.collect(rt.units.BitRate.default)) |packet| {
         std.debug.print("{any}\n", .{packet});
     }
 }

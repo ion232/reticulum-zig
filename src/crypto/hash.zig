@@ -44,7 +44,7 @@ pub fn hash_items(items: anytype) Self {
         }
     }
 
-    hasher.final(hash[0..long_length]);
+    hasher.final(hash.bytes[0..long_length]);
 
     return hash;
 }

@@ -1,9 +1,11 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const RingBuffer = @import("RingBuffer.zig");
+const RingBuffer = @import("RingBuffer.zig").RingBuffer;
 
 pub fn ThreadSafeRingBuffer(comptime T: type) type {
     return struct {
+        pub const Error = Impl.Error;
+
         const Self = @This();
         const Impl = RingBuffer(T);
 

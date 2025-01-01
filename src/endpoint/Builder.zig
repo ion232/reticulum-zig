@@ -17,7 +17,7 @@ pub const Error = error{
     Incomplete,
     InvalidName,
     InvalidAspect,
-};
+} || Allocator.Error;
 
 ally: Allocator,
 fields: Fields,
@@ -32,7 +32,7 @@ pub fn init(ally: Allocator) Self {
         .ally = ally,
         .fields = Fields.initEmpty(),
         .application_name = Bytes.init(ally),
-        .aspects = Bytes.init(ally),
+        .aspects = std.ArrayList(Bytes).init(ally),
     };
 }
 
@@ -54,16 +54,16 @@ pub fn set_method(self: *Self, method: Method) *Self {
     return self;
 }
 
-pub fn set_application_name(self: *Self, application_name: []const u8) *Self {
+pub fn set_application_name(self: *Self, application_name: []const u8) !*Self {
     self.fields.set(3);
     self.application_name = Bytes.init(self.ally);
-    self.application_name.appendSlice(application_name);
+    try self.application_name.appendSlice(application_name);
     return self;
 }
 
-pub fn append_aspect(self: *Self, aspect: []const u8) *Self {
+pub fn append_aspect(self: *Self, aspect: []const u8) !*Self {
     const managed_aspect = Bytes.init(self.ally);
-    managed_aspect.appendSlice(aspect);
+    try managed_aspect.appendSlice(aspect);
     self.aspects.append(managed_aspect);
     return self;
 }
@@ -72,7 +72,7 @@ pub fn build(self: *Self) Error!Managed {
     errdefer {
         self.application_name.clearAndFree();
 
-        for (self.aspects) |a| {
+        for (self.aspects.items) |*a| {
             a.clearAndFree();
         }
 
@@ -82,7 +82,7 @@ pub fn build(self: *Self) Error!Managed {
     if (self.fields.count() == self.fields.capacity()) {
         const name_hash = blk: {
             // TODO: Do this incrementally without copying. Needs to handle the runtime number of dots.
-            const name_bytes = Bytes.init(self.ally);
+            var name_bytes = Bytes.init(self.ally);
             try name_bytes.appendSlice(self.application_name.items);
 
             errdefer {
@@ -95,7 +95,7 @@ pub fn build(self: *Self) Error!Managed {
                 }
             }
 
-            for (self.aspects) |a| {
+            for (self.aspects.items) |a| {
                 for (a.items) |c| {
                     if (c == '.') {
                         return Error.InvalidAspect;
@@ -106,7 +106,7 @@ pub fn build(self: *Self) Error!Managed {
                 try name_bytes.appendSlice(a.items);
             }
 
-            break :blk Hash.hash_data(name_bytes);
+            break :blk Hash.hash_data(name_bytes.items);
         };
 
         const hash = Hash.hash_items(.{
@@ -121,8 +121,8 @@ pub fn build(self: *Self) Error!Managed {
             .method = self.method,
             .application_name = self.application_name,
             .aspects = self.aspects,
-            .hash = hash.short(),
-            .name_hash = name_hash.name(),
+            .hash = hash,
+            .name_hash = name_hash,
         };
     }
 

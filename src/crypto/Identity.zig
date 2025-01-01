@@ -1,3 +1,4 @@
+const errors = @import("std").crypto.errors;
 const X25519 = @import("X25519.zig");
 const Ed25519 = @import("Ed25519.zig");
 const Hash = @import("Hash.zig");
@@ -5,7 +6,10 @@ const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
 
-pub const Error = error{MissingSecretKey};
+pub const Error = error{
+    MissingSecretKey,
+} || errors.EncodingError || errors.IdentityElementError || errors.NonCanonicalError || errors.SignatureVerificationError || errors.KeyMismatchError || errors.WeakPublicKeyError;
+
 pub const Ratchet = X25519.SecretKey;
 pub const PublicKeys = Public;
 pub const Public = struct {
@@ -30,9 +34,9 @@ pub fn from_public(public: Public) Self {
     };
 }
 
-pub fn random(rng: *Rng) Self {
-    const dh_seed: [X25519.seed_length]u8 = undefined;
-    const signature_seed: [Ed25519.KeyPair.seed_length]u8 = undefined;
+pub fn random(rng: *Rng) !Self {
+    var dh_seed: [X25519.seed_length]u8 = undefined;
+    var signature_seed: [Ed25519.KeyPair.seed_length]u8 = undefined;
 
     rng.bytes(&dh_seed);
     rng.bytes(&signature_seed);
@@ -52,7 +56,7 @@ pub fn random(rng: *Rng) Self {
     return .{
         .public = public,
         .secret = secret,
-        .hash = make_hash(public),
+        .hash = make_hash(&public),
     };
 }
 
@@ -60,14 +64,14 @@ pub fn random(rng: *Rng) Self {
 
 // pub fn decrypt(self: *const Self, data: []u8) void {}
 
-pub fn sign(self: *const Self, data: []u8) !Ed25519.Signature {
+pub fn signer(self: *const Self) Error!Ed25519.Signer {
     if (self.secret) |s| {
         const key_pair = Ed25519.KeyPair{
             .public_key = self.public.signature,
             .secret_key = s.signature,
         };
         const no_noise = null;
-        return try key_pair.sign(data, no_noise);
+        return try key_pair.signer(no_noise);
     }
 
     return Error.MissingSecretKey;
@@ -78,8 +82,8 @@ pub fn has_secret(self: *Self) bool {
 }
 
 fn make_hash(public: *const Public) Hash {
-    return Hash.from_items(.{
+    return Hash.hash_items(.{
         .dh = public.dh,
-        .sign = public.sign,
+        .signature = public.signature,
     });
 }

@@ -1,25 +1,35 @@
 const std = @import("std");
 const interface = @import("interface.zig");
 
+pub const Element = @import("node/Element.zig");
+pub const Options = @import("node/Options.zig");
+
 const Allocator = std.mem.Allocator;
 const BitRate = @import("units.zig").BitRate;
-const Element = @import("node/Element.zig");
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
-const Options = @import("node/Options.zig");
 const Packet = @import("packet.zig").Packet;
+const PacketFactory = @import("packet.zig").Factory;
 const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
 const ThreadSafeRingBuffer = @import("internal/ThreadSafeRingBuffer.zig").ThreadSafeRingBuffer;
 const System = @import("System.zig");
-
-const Self = @This();
 
 pub const Error = error{
     InterfaceNotFound,
     TooManyInterfaces,
     TooManyIncoming,
 } || Allocator.Error;
+
+const Route = struct {
+    timestamp: i64,
+    interface_id: interface.Id,
+    next_hop: Hash.Short,
+    hops: u8,
+    // More fields.
+};
+
+const Self = @This();
 
 ally: Allocator,
 system: System,
@@ -38,7 +48,7 @@ pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!S
         .mutex = .{},
         .endpoints = EndpointStore.init(ally),
         .interfaces = std.AutoHashMap(interface.Id, *interface.Engine).init(ally),
-        .routes = std.StringHashMap(Hash).init(ally),
+        .routes = std.StringHashMap(Route).init(ally),
         .current_interface_id = 0,
     };
 }
@@ -69,11 +79,18 @@ pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engin
         return Error.TooManyInterfaces;
     }
 
-    const engine = try self.ally.create(interface.Engine);
-    engine.* = interface.Engine.init(self.ally, config);
-
-    try self.interfaces.put(self.current_interface_id, engine);
+    const id = self.current_interface_id;
     self.current_interface_id += 1;
+
+    const incoming = try self.ally.create(interface.Engine.Incoming);
+    const outgoing = try self.ally.create(interface.Engine.Outgoing);
+    incoming.* = try interface.Engine.Incoming.init(self.ally, config.max_held_packets);
+    outgoing.* = try interface.Engine.Outgoing.init(self.ally, config.max_held_packets);
+    const packet_factory = PacketFactory.init(self.ally, self.system.clock, self.system.rng, config);
+
+    const engine = try self.ally.create(interface.Engine);
+    engine.* = interface.Engine.init(self.ally, config, id, incoming, outgoing, packet_factory);
+    try self.interfaces.put(id, engine);
 
     return engine.api();
 }
@@ -101,12 +118,12 @@ pub fn process(self: *Self) Error!void {
         self.mutex.unlock();
     }
 
-    const now = self.system.clock.monotonicTime();
-    self.process_incoming(now);
-    self.process_outgoing(now);
+    const now = self.system.clock.monotonicNanos();
+    try self.process_incoming(now);
+    try self.process_outgoing(now);
 }
 
-fn process_incoming(self: *Self, now: i64) !void {
+fn process_incoming(self: *Self, now: u64) !void {
     const element = self.incoming.pop() orelse return;
     const packet = &element.packet;
     const header = &packet.header;
@@ -143,7 +160,7 @@ fn process_incoming(self: *Self, now: i64) !void {
     }
 }
 
-fn process_outgoing(self: *Self, now: i64) !void {
+fn process_outgoing(self: *Self, now: u64) !void {
     const element = self.outgoing.pop() orelse return;
     const packet = element.packet;
     _ = now;
@@ -152,6 +169,8 @@ fn process_outgoing(self: *Self, now: i64) !void {
 
     if (packet.header.purpose == .announce) {
         // Broadcast to all interfaces.
+        // const interfaces = self.interfaces.valueIterator();
+        // while (interfaces.next()) |interface| {}
         return;
     }
 
@@ -170,11 +189,3 @@ fn shouldDrop(self: *Self, packet: *Packet) bool {
     _ = packet;
     return false;
 }
-
-const Route = struct {
-    timestamp: i64,
-    interface_id: interface.Id,
-    next_hop: Hash.Short,
-    hops: u8,
-    // More fields.
-};

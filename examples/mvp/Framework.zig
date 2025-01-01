@@ -26,8 +26,8 @@ edges: std.ArrayList(std.AutoHashMap(usize, void)),
 nodes: std.ArrayList(Node),
 
 pub fn init(ally: Allocator, options: rt.Node.Options) Self {
-    const clock = Clock.init();
-    const rng = rt.System.Os.Rng.init();
+    var clock = Clock.init();
+    var rng = rt.System.Os.Rng.init();
 
     return Self{
         .ally = ally,
@@ -43,17 +43,20 @@ pub fn init(ally: Allocator, options: rt.Node.Options) Self {
     };
 }
 
-pub fn add_endpoint(self: *Self, name: []const u8) ?rt.Endpoint {
-    const endpoint = try rt.endpoint.Builder.init(self.ally)
-        .set_identity(rt.Identity.random(&self.system.rng))
+pub fn add_endpoint(self: *Self, name: []const u8) !rt.Endpoint {
+    const identity = try rt.Identity.random(&self.system.rng);
+    var builder = rt.endpoint.Builder.init(self.ally);
+    _ = try builder
+        .set_identity(identity)
         .set_direction(.in)
         .set_method(.single)
-        .set_application_name(name)
-        .build();
+        .set_application_name(name);
+    var endpoint = try builder.build();
 
     if (self.indices.get(name)) |index| {
-        const node = self.nodes.items[index];
-        node.endpoints.append(endpoint);
+        var node = self.nodes.items[index];
+        const endpoint_copy = try endpoint.copy();
+        try node.endpoints.append(endpoint_copy);
     }
 
     return endpoint;
@@ -79,16 +82,16 @@ pub fn send(self: *Self, src: []const u8, dst: []const u8, data: []const u8) !vo
 }
 
 pub fn process(self: *Self) !void {
-    const indices = self.indices.valueIterator();
+    var indices = self.indices.valueIterator();
     while (indices.next()) |index| {
-        const target = self.nodes.items[index.*];
-        target.node.process();
-        while (target.api.collect()) |packet| {
-            const keys = self.edges.items[index.*].keyIterator();
+        var target = self.nodes.items[index.*];
+        try target.node.process();
+        while (target.api.collect(rt.units.BitRate.default)) |packet| {
+            var keys = self.edges.items[index.*].keyIterator();
             while (keys.next()) |k| {
-                const connected = self.nodes.items[k.*];
-                connected.api.deliver(packet);
-                connected.node.process();
+                var connected = self.nodes.items[k.*];
+                try connected.api.deliver(packet);
+                try connected.node.process();
             }
         }
     }
@@ -103,7 +106,7 @@ pub fn add_node(self: *Self, name: []const u8) !*Node {
     try self.indices.put(name, index);
     try self.edges.append(std.AutoHashMap(usize, void).init(self.ally));
 
-    const node = try rt.Node.init(self.ally, self.system, self.options);
+    var node = try rt.Node.init(self.ally, self.system, self.options);
     try self.nodes.append(Node{
         .node = node,
         .endpoints = std.ArrayList(rt.Endpoint).init(self.ally),
@@ -117,6 +120,6 @@ pub fn connect(self: *Self, a: []const u8, b: []const u8) !void {
     const a_index = self.indices.get(a) orelse return Error.UnknownName;
     const b_index = self.indices.get(b) orelse return Error.UnknownName;
 
-    try self.edges.items[a_index].put(b_index);
-    try self.edges.items[b_index].put(a_index);
+    try self.edges.items[a_index].put(b_index, {});
+    try self.edges.items[b_index].put(a_index, {});
 }

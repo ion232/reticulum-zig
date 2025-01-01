@@ -20,27 +20,24 @@ aspects: std.ArrayList(Bytes),
 hash: Hash,
 name_hash: Hash,
 
-pub fn reversed(self: *Self) Self {
-    const new = Self{
+pub fn copy(self: *Self) !Self {
+    var new = Self{
         .ally = self.ally,
         .identity = self.identity,
-        .direction = switch (self.direction) {
-            .in => .out,
-            .out => .in,
-        },
+        .direction = self.direction,
         .method = self.method,
         .application_name = Bytes.init(self.ally),
-        .aspects = std.ArrayList(u8).init(self.ally),
+        .aspects = std.ArrayList(Bytes).init(self.ally),
         .hash = self.hash,
         .name_hash = self.name_hash,
     };
 
-    new.application_name.appendSlice(self.application_name);
+    try new.application_name.appendSlice(self.application_name.items);
 
     for (self.aspects.items) |aspect| {
-        const new_aspect = Bytes.init(self.ally);
-        new.appendSlice(aspect.items);
-        new.aspects.append(new_aspect);
+        var new_aspect = Bytes.init(self.ally);
+        try new_aspect.appendSlice(aspect.items);
+        try new.aspects.append(new_aspect);
     }
 
     return new;

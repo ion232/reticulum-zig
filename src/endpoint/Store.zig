@@ -2,7 +2,7 @@ const std = @import("std");
 const crypto = @import("../crypto.zig");
 
 const Allocator = std.mem.Allocator;
-const Endpoint = @import("../endpoint.zig").Endpoint;
+const Endpoint = @import("Managed.zig");
 const Identity = crypto.Identity;
 const Interface = @import("../Interface.zig");
 const Ratchet = Identity.Ratchet;

@@ -17,6 +17,15 @@ pub const Payload = union(enum) {
     pub const Announce = struct {
         pub const Noise = [5]u8;
         pub const Timestamp = u40;
+        pub const minimum_size = blk: {
+            var total = 0;
+            total += crypto.X25519.public_length;
+            total += crypto.Ed25519.PublicKey.encoded_length;
+            total += crypto.Hash.name_length;
+            total += 5;
+            total += 5;
+            break :blk total;
+        };
 
         public: Identity.Public,
         name_hash: Hash.Name,
@@ -35,11 +44,11 @@ pub const Payload = union(enum) {
 pub const Endpoints = union(Header.Flag.Format) {
     const Self = @This();
 
-    pub const Normal = packed struct {
+    pub const Normal = struct {
         endpoint: Hash.Short,
     };
 
-    pub const Transport = packed struct {
+    pub const Transport = struct {
         transport_id: Hash.Short,
         endpoint: Hash.Short,
     };

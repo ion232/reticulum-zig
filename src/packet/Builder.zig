@@ -2,14 +2,16 @@ const std = @import("std");
 const crypto = @import("../crypto.zig");
 const packet = @import("../packet.zig");
 
+pub const Endpoints = packet.Endpoints;
+
 const Allocator = std.mem.Allocator;
 const Bytes = std.ArrayList(u8);
 const Managed = @import("Managed.zig");
 const Hash = crypto.Hash;
 const Header = packet.Header;
 const Context = packet.Context;
+const Payload = packet.Payload;
 const Endpoint = @import("../endpoint.zig").Managed;
-const Endpoints = Managed.Endpoints;
 
 const Self = @This();
 const Fields = std.bit_set.IntegerBitSet(1);
@@ -22,7 +24,7 @@ header: Header,
 interface_access_code: Bytes,
 endpoints: Endpoints,
 context: Context,
-payload: Bytes,
+payload: Payload,
 
 pub fn init(ally: Allocator) Self {
     return Self{
@@ -31,8 +33,8 @@ pub fn init(ally: Allocator) Self {
         .header = .{},
         .interface_access_code = Bytes.init(ally),
         .endpoints = undefined,
-        .context = 0,
-        .payload = Bytes.init(ally),
+        .context = .none,
+        .payload = .none,
     };
 }
 
@@ -41,8 +43,8 @@ pub fn set_header(self: *Self, header: Header) *Self {
     return self;
 }
 
-pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8) *Self {
-    self.interface_access_code.appendSlice(interface_access_code);
+pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8) !*Self {
+    try self.interface_access_code.appendSlice(interface_access_code);
     if (interface_access_code.len > 0) {
         self.header.interface = .authenticated;
     }
@@ -87,12 +89,21 @@ pub fn set_context(self: *Self, context: Context) *Self {
     return self;
 }
 
-pub fn append_payload(self: *Self, payload: []const u8) *Self {
-    self.payload.appendSlice(payload);
+pub fn set_payload(self: *Self, payload: Payload) *Self {
+    self.header.purpose = switch (payload) {
+        .announce => .announce,
+        else => self.header.purpose,
+    };
+    self.payload = payload;
     return self;
 }
 
-pub fn build(self: *Self) Managed {
+pub fn append_payload(self: *Self, payload: []const u8) !*Self {
+    try self.payload.appendSlice(payload);
+    return self;
+}
+
+pub fn build(self: *Self) !Managed {
     if (self.fields.count() == self.fields.capacity()) {
         return Managed{
             .ally = self.ally,
