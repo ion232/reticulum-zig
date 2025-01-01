@@ -76,7 +76,7 @@ pub const Header = packed struct {
 
         pub const Context = enum(u1) {
             none,
-            set,
+            some,
         };
 
         pub const Propagation = enum(u1) {
@@ -94,13 +94,13 @@ pub const Header = packed struct {
         };
     };
 
-    interface: Flag.Interface,
-    format: Flag.Format,
-    context: Flag.Context,
-    propagation: Flag.Propagation,
-    method: Flag.Method,
-    purpose: Flag.Purpose,
-    hops: u8,
+    interface: Flag.Interface = .open,
+    format: Flag.Format = .normal,
+    context: Flag.Context = .none,
+    propagation: Flag.Propagation = .broadcast,
+    method: Flag.Method = .single,
+    purpose: Flag.Purpose = .data,
+    hops: u8 = 0,
 };
 
 pub const Context = enum(u8) {

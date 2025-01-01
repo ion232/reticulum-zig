@@ -44,9 +44,14 @@ pub fn init(
     };
 }
 
-pub fn deliver(ptr: anyopaque, bytes: []const u8) !void {
+pub fn deliver_raw(ptr: anyopaque, bytes: []const u8) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
     const packet = try self.packet_factory.from_bytes(bytes);
+    deliver(packet);
+}
+
+pub fn deliver(ptr: anyopaque, packet: Packet) !void {
+    const self: *Self = @ptrCast(@alignCast(ptr));
     self.incoming.push(packet);
 }
 
@@ -64,6 +69,7 @@ pub fn collect(ptr: anyopaque, current_bit_rate: BitRate) ?Packet {
 pub fn api(self: *Self) Api {
     return Api{
         .ptr = self,
+        .deliverRawFn = deliver_raw,
         .deliverFn = deliver,
         .sendFn = send,
         .collectFn = collect,
@@ -72,7 +78,8 @@ pub fn api(self: *Self) Api {
 
 pub const Api = struct {
     ptr: *anyopaque,
-    deliverFn: *const fn (ptr: *anyopaque, raw_bytes: []const u8) void,
+    deliverRawFn: *const fn (ptr: *anyopaque, raw_bytes: []const u8) void,
+    deliverFn: *const fn (ptr: *anyopaque, packet: Packet) void,
     sendFn: *const fn (ptr: *anyopaque, packet: Packet) void,
     collectFn: *const fn (ptr: *anyopaque, current_bit_rate: BitRate) ?Packet,
 
@@ -84,8 +91,12 @@ pub const Api = struct {
 
     // pub fn data(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {}
 
-    pub fn deliver(self: *@This(), raw_bytes: []const u8) void {
-        return self.deliverFn(self.ptr, raw_bytes);
+    pub fn deliver_raw(self: *@This(), raw_bytes: []const u8) void {
+        return self.deliverRawFn(self.ptr, raw_bytes);
+    }
+
+    pub fn deliver(self: *@This(), packet: Packet) void {
+        return self.deliverFn(self.ptr, packet);
     }
 
     pub fn send(self: *@This(), packet: Packet) void {

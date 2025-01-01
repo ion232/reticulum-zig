@@ -12,59 +12,78 @@ const Endpoint = @import("../endpoint.zig").Managed;
 const Endpoints = Managed.Endpoints;
 
 const Self = @This();
-const Fields = std.bit_set.IntegerBitSet(2);
+const Fields = std.bit_set.IntegerBitSet(1);
 
 pub const Error = error{Incomplete};
 
 ally: Allocator,
 fields: Fields,
-header: Header = undefined,
+header: Header,
 interface_access_code: Bytes,
-endpoints: Endpoints = undefined,
-context: Context = 0,
+endpoints: Endpoints,
+context: Context,
 payload: Bytes,
 
 pub fn init(ally: Allocator) Self {
     return Self{
         .ally = ally,
         .fields = Fields.initEmpty(),
+        .header = .{},
         .interface_access_code = Bytes.init(ally),
+        .endpoints = undefined,
+        .context = 0,
         .payload = Bytes.init(ally),
     };
 }
 
 pub fn set_header(self: *Self, header: Header) *Self {
-    self.fields.set(0);
     self.header = header;
     return self;
 }
 
 pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8) *Self {
     self.interface_access_code.appendSlice(interface_access_code);
+    if (interface_access_code.len > 0) {
+        self.header.interface = .authenticated;
+    }
     return self;
 }
 
 pub fn set_endpoint(self: *Self, endpoint_hash: Hash.Short) *Self {
-    self.fields.set(1);
+    self.fields.set(0);
     self.endpoints = .{
         .normal = .{ .endpoint = endpoint_hash },
     };
+    self.header.format = .normal;
     return self;
 }
 
 pub fn set_transport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.Short) *Self {
-    self.fields.set(1);
+    self.fields.set(0);
     self.endpoints = .{
         .transport = .{
             .endpoint = endpoint_hash,
             .transport_id = transport_id,
         },
     };
+    self.header.format = .transport;
+    self.header.propagation = .transport;
+    return self;
+}
+
+pub fn set_method(self: *Self, method: Header.Flag.Method) *Self {
+    self.header.method = method;
+    return self;
+}
+
+pub fn set_purpose(self: *Self, purpose: Header.Flag.Purpose) *Self {
+    self.header.purpose = purpose;
     return self;
 }
 
 pub fn set_context(self: *Self, context: Context) *Self {
     self.context = context;
+    self.header.context = .some;
     return self;
 }
 

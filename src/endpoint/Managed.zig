@@ -19,3 +19,29 @@ application_name: Bytes,
 aspects: std.ArrayList(Bytes),
 hash: Hash,
 name_hash: Hash,
+
+pub fn reversed(self: *Self) Self {
+    const new = Self{
+        .ally = self.ally,
+        .identity = self.identity,
+        .direction = switch (self.direction) {
+            .in => .out,
+            .out => .in,
+        },
+        .method = self.method,
+        .application_name = Bytes.init(self.ally),
+        .aspects = std.ArrayList(u8).init(self.ally),
+        .hash = self.hash,
+        .name_hash = self.name_hash,
+    };
+
+    new.application_name.appendSlice(self.application_name);
+
+    for (self.aspects.items) |aspect| {
+        const new_aspect = Bytes.init(self.ally);
+        new.appendSlice(aspect.items);
+        new.aspects.append(new_aspect);
+    }
+
+    return new;
+}
