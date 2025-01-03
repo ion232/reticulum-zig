@@ -27,24 +27,28 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
+pub fn deinit(self: *Self) Self {
+    _ = self;
+}
+
 pub fn validate(self: *Self) !bool {
     switch (self.payload) {
         .announce => |a| {
-            const endpoint_hash = a.endpoints.endpoint();
-            const verifier = try a.signature.verifier(a.public.signature);
+            const endpoint_hash = self.endpoints.endpoint();
+            var verifier = try a.signature.verifier(a.public.signature);
             verifier.update(&endpoint_hash);
             verifier.update(&a.public.dh);
-            verifier.update(&a.public.signature);
+            verifier.update(&a.public.signature.bytes);
             verifier.update(&a.name_hash);
             verifier.update(&a.noise);
-            verifier.update(&std.mem.asBytes(a.timestamp));
+            verifier.update(std.mem.asBytes(&a.timestamp));
             verifier.update(a.application_data.items);
             try verifier.verify();
 
             const identity = crypto.Identity.from_public(a.public);
             const expected_hash = Hash.hash_items(.{
-                .name_hash = a.name_hash[0..],
-                .public_hash = identity.hash.short()[0..],
+                .name_hash = a.name_hash,
+                .public_hash = identity.hash.short(),
             });
 
             const matching_hashes = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);

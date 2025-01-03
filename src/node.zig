@@ -11,8 +11,7 @@ const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
 const Packet = @import("packet.zig").Packet;
 const PacketFactory = @import("packet.zig").Factory;
-const RingBuffer = @import("internal/RingBuffer.zig").RingBuffer;
-const ThreadSafeRingBuffer = @import("internal/ThreadSafeRingBuffer.zig").ThreadSafeRingBuffer;
+const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
 const System = @import("System.zig");
 
 pub const Error = error{
@@ -22,7 +21,7 @@ pub const Error = error{
 } || Allocator.Error;
 
 const Route = struct {
-    timestamp: i64,
+    timestamp: u64,
     interface_id: interface.Id,
     next_hop: Hash.Short,
     hops: u8,
@@ -84,8 +83,8 @@ pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engin
 
     const incoming = try self.ally.create(interface.Engine.Incoming);
     const outgoing = try self.ally.create(interface.Engine.Outgoing);
-    incoming.* = try interface.Engine.Incoming.init(self.ally, config.max_held_packets);
-    outgoing.* = try interface.Engine.Outgoing.init(self.ally, config.max_held_packets);
+    incoming.* = try interface.Engine.Incoming.init(self.ally);
+    outgoing.* = try interface.Engine.Outgoing.init(self.ally);
     const packet_factory = PacketFactory.init(self.ally, self.system.clock, self.system.rng, config);
 
     const engine = try self.ally.create(interface.Engine);
@@ -111,7 +110,7 @@ pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
     return Error.InterfaceNotFound;
 }
 
-pub fn process(self: *Self) Error!void {
+pub fn process(self: *Self) !void {
     self.mutex.lock();
 
     defer {
@@ -124,67 +123,78 @@ pub fn process(self: *Self) Error!void {
 }
 
 fn process_incoming(self: *Self, now: u64) !void {
-    const element = self.incoming.pop() orelse return;
-    const packet = &element.packet;
-    const header = &packet.header;
+    var iterator = self.interfaces.iterator();
 
-    defer {
-        self.ally.free(element.raw_data);
-    }
+    while (iterator.next()) |entry| {
+        var incoming = entry.value_ptr.*.incoming;
+        while (incoming.pop()) |element| {
+            var packet = element.packet;
+            var header = packet.header;
+            // defer {
+            //     self.ally.free(element.packet.deinit());
+            // }
 
-    if (self.shouldDrop(packet)) {
-        return;
-    }
+            if (self.shouldDrop(&packet)) {
+                return;
+            }
 
-    header.hops += 1;
+            header.hops += 1;
 
-    const is_valid = try packet.validate();
-    if (!is_valid) {
-        return;
-    }
+            const is_valid = try packet.validate();
+            if (!is_valid) {
+                return;
+            }
 
-    if (header.purpose == .announce) {
-        const endpoint_hash = packet.endpoints.endpoint();
-        const next_hop = packet.endpoints.next_hop();
+            if (header.purpose == .announce) {
+                const endpoint_hash = packet.endpoints.endpoint();
+                const next_hop = packet.endpoints.next_hop();
 
-        // TODO: Check for hash collisions I suppose.
-        // TODO: Remember packet.
-        // TODO: Remember ratchet.
+                // TODO: Check for hash collisions I suppose.
+                // TODO: Remember packet.
+                // TODO: Remember ratchet.
 
-        try self.routes.put(endpoint_hash, Route{
-            .timestamp = now,
-            .interface_id = element.interface_id,
-            .next_hop = next_hop,
-            .hops = header.hops,
-        });
+                try self.routes.put(&endpoint_hash, Route{
+                    .timestamp = now,
+                    .interface_id = entry.key_ptr.*,
+                    .next_hop = next_hop,
+                    .hops = header.hops,
+                });
+            }
+        }
     }
 }
 
 fn process_outgoing(self: *Self, now: u64) !void {
-    const element = self.outgoing.pop() orelse return;
-    const packet = element.packet;
+    var iterator = self.interfaces.iterator();
     _ = now;
 
-    const endpoint = packet.endpoints.endpoint();
+    while (iterator.next()) |entry| {
+        var outgoing = entry.value_ptr.*.outgoing;
+        while (outgoing.pop()) |element| {
+            var packet = element.packet;
+            const endpoint = packet.endpoints.endpoint();
 
-    if (packet.header.purpose == .announce) {
-        // Broadcast to all interfaces.
-        // const interfaces = self.interfaces.valueIterator();
-        // while (interfaces.next()) |interface| {}
-        return;
-    }
+            if (packet.header.purpose == .announce) {
+                // Broadcast to all interfaces.
+                // const interfaces = self.interfaces.valueIterator();
+                // while (interfaces.next()) |interface| {}
+                std.debug.print("Got an announce!", .{});
+                return;
+            }
 
-    const route = self.routes.get(endpoint) orelse return;
-    if (route.hops == 1) {
-        if (self.interfaces.get(element.interface_id)) |engine| {
-            engine.send(packet);
+            const route = self.routes.get(&endpoint) orelse return;
+            if (route.hops == 1) {
+                if (self.interfaces.get(entry.key_ptr.*)) |engine| {
+                    try engine.outgoing.push(.{ .packet = packet });
+                }
+            } else {
+                // Modify the packet for transport.
+            }
         }
-    } else {
-        // Modify the packet for transport.
     }
 }
 
-fn shouldDrop(self: *Self, packet: *Packet) bool {
+fn shouldDrop(self: *Self, packet: *const Packet) bool {
     _ = self;
     _ = packet;
     return false;

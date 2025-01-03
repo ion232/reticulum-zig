@@ -56,7 +56,7 @@ pub fn random(rng: *Rng) !Self {
     return .{
         .public = public,
         .secret = secret,
-        .hash = make_hash(&public),
+        .hash = make_hash(public),
     };
 }
 
@@ -81,9 +81,9 @@ pub fn has_secret(self: *Self) bool {
     return self.secret != null;
 }
 
-fn make_hash(public: *const Public) Hash {
+fn make_hash(public: Public) Hash {
     return Hash.hash_items(.{
-        .dh = public.dh[0..],
-        .signature = public.signature.bytes[0..],
+        .dh = public.dh,
+        .signature = public.signature.bytes,
     });
 }

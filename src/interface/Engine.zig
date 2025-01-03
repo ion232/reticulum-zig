@@ -11,15 +11,15 @@ const Hash = @import("../crypto.zig").Hash;
 const Packet = @import("../packet.zig").Packet;
 const PacketBuilder = @import("../packet.zig").Builder;
 const PacketFactory = @import("../packet.zig").Factory;
-const RingBuffer = @import("../internal/RingBuffer.zig").RingBuffer;
-const ThreadSafeRingBuffer = @import("../internal/ThreadSafeRingBuffer.zig").ThreadSafeRingBuffer;
+const ThreadSafeFifo = @import("../internal/ThreadSafeFifo.zig").ThreadSafeFifo;
 
 // Probably rework this file.
 
-pub const Incoming = ThreadSafeRingBuffer(Element.In);
-pub const Outgoing = ThreadSafeRingBuffer(Element.Out);
-
+pub const Incoming = ThreadSafeFifo(Element.In);
+pub const Outgoing = ThreadSafeFifo(Element.Out);
 pub const Error = Incoming.Error || Outgoing.Error || PacketFactory.Error || Allocator.Error;
+
+const ForCollection = std.fifo.LinearFifo(Packet, .Dynamic);
 
 const Self = @This();
 
@@ -27,7 +27,7 @@ ally: Allocator,
 id: Id,
 incoming: *Incoming,
 outgoing: *Outgoing,
-for_collection: RingBuffer(Packet),
+for_collection: ForCollection,
 packet_factory: PacketFactory,
 // TODO: Replace this with an announce handling class potentially.
 bit_rate: BitRate,
@@ -45,7 +45,7 @@ pub fn init(
         .id = id,
         .incoming = incoming,
         .outgoing = outgoing,
-        .for_collection = try RingBuffer(Packet).init(ally, config.max_held_packets),
+        .for_collection = ForCollection.init(ally),
         .packet_factory = packet_factory,
         .bit_rate = config.initial_bit_rate,
     };
@@ -70,7 +70,7 @@ pub fn send(ptr: *anyopaque, packet: Packet) !void {
 pub fn collect(ptr: *anyopaque, current_bit_rate: BitRate) ?Packet {
     const self: *Self = @ptrCast(@alignCast(ptr));
     self.bit_rate = current_bit_rate;
-    return self.for_collection.pop();
+    return self.for_collection.readItem();
 }
 
 pub fn api(self: *Self) Api {

@@ -110,8 +110,8 @@ pub fn build(self: *Self) Error!Managed {
         };
 
         const hash = Hash.hash_items(.{
-            .name_hash = name_hash.name()[0..],
-            .identity_hash = self.identity.hash.short()[0..],
+            .name_hash = name_hash.name(),
+            .identity_hash = self.identity.hash.short(),
         });
 
         return Managed{

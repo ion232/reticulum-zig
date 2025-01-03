@@ -36,10 +36,13 @@ pub fn hash_items(items: anytype) Self {
                     hasher.update(l.items);
                 }
             },
+            *const Long => hasher.update(value),
+            *const Short => hasher.update(value),
+            *const Name => hasher.update(value),
             else => switch (@typeInfo(@TypeOf(value))) {
                 .Int => hasher.update(std.mem.asBytes(&value)),
                 .Array => |_| hasher.update(std.mem.sliceAsBytes(value[0..])),
-                else => @compileError("Unsupported type: " + @typeName(@TypeOf(value))),
+                else => @compileError("Unsupported type: " ++ @typeName(@TypeOf(value))),
             },
         }
     }

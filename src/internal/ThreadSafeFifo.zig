@@ -1,21 +1,21 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const RingBuffer = @import("RingBuffer.zig").RingBuffer;
+const LinearFifo = std.fifo.LinearFifo;
 
-pub fn ThreadSafeRingBuffer(comptime T: type) type {
+pub fn ThreadSafeFifo(comptime T: type) type {
     return struct {
-        pub const Error = Impl.Error;
+        pub const Error = Allocator.Error;
 
         const Self = @This();
-        const Impl = RingBuffer(T);
+        const Impl = LinearFifo(T, .Dynamic);
 
         mutex: std.Thread.Mutex,
         impl: Impl,
 
-        pub fn init(ally: Allocator, capacity: usize) Allocator.Error!Self {
+        pub fn init(ally: Allocator) Error!Self {
             return Self{
                 .mutex = .{},
-                .impl = try Impl.init(ally, capacity),
+                .impl = Impl.init(ally),
             };
         }
 
@@ -26,12 +26,12 @@ pub fn ThreadSafeRingBuffer(comptime T: type) type {
             self.* = undefined;
         }
 
-        pub fn push(self: *Self, element: T) Impl.Error!void {
+        pub fn push(self: *Self, element: T) Error!void {
             self.mutex.lock();
             defer {
                 self.mutex.unlock();
             }
-            try self.impl.push(element);
+            try self.impl.writeItem(element);
         }
 
         pub fn pop(self: *Self) ?T {
@@ -39,7 +39,7 @@ pub fn ThreadSafeRingBuffer(comptime T: type) type {
             defer {
                 self.mutex.unlock();
             }
-            return self.impl.pop();
+            return self.impl.readItem();
         }
     };
 }
