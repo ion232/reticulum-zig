@@ -128,6 +128,7 @@ fn process_incoming(self: *Self, now: u64) !void {
     while (iterator.next()) |entry| {
         var incoming = entry.value_ptr.*.incoming;
         while (incoming.pop()) |element| {
+            std.debug.print("incoming packet\n", .{});
             var packet = element.packet;
             var header = packet.header;
             // defer {
@@ -176,9 +177,11 @@ fn process_outgoing(self: *Self, now: u64) !void {
 
             if (packet.header.purpose == .announce) {
                 // Broadcast to all interfaces.
-                // const interfaces = self.interfaces.valueIterator();
-                // while (interfaces.next()) |interface| {}
-                std.debug.print("Got an announce!", .{});
+                // var interfaces = self.interfaces.valueIterator();
+                // while (interfaces.next()) |ife| {
+                //     try ife.*.outgoing.push(.{ .packet = packet });
+                // }
+                // std.debug.print("Got an announce!\n", .{});
                 return;
             }
 

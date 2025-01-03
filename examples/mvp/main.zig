@@ -11,7 +11,7 @@ pub fn main() !void {
     const names = [_][]const u8{ "A", "B", "C" };
 
     for (names) |name| {
-        _ = try f.add_node(name);
+        try f.add_node(name);
     }
 
     try f.connect("A", "B");

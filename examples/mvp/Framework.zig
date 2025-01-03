@@ -97,7 +97,7 @@ pub fn process(self: *Self) !void {
     }
 }
 
-pub fn add_node(self: *Self, name: []const u8) !*Node {
+pub fn add_node(self: *Self, name: []const u8) !void {
     if (self.indices.contains(name)) {
         return Error.DuplicateName;
     }
@@ -107,13 +107,14 @@ pub fn add_node(self: *Self, name: []const u8) !*Node {
     try self.edges.append(std.AutoHashMap(usize, void).init(self.ally));
 
     var node = try rt.Node.init(self.ally, self.system, self.options);
+    const api = try node.addInterface(.{});
     try self.nodes.append(Node{
         .node = node,
         .endpoints = std.ArrayList(rt.Endpoint).init(self.ally),
-        .api = try node.addInterface(.{}),
+        .api = api,
     });
 
-    return &self.nodes.items[index];
+    // return &self.nodes.items[index];
 }
 
 pub fn connect(self: *Self, a: []const u8, b: []const u8) !void {
