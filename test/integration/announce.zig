@@ -1,12 +1,28 @@
 const std = @import("std");
 const rt = @import("reticulum");
+const fixtures = @import("fixtures");
 
-const Framework = @import("Framework.zig");
+const Allocator = std.mem.Allocator;
+const Framework = fixtures.Framework;
 
-pub fn main() !void {
+test {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var thread_safe_gpa = std.heap.ThreadSafeAllocator{ .child_allocator = gpa.allocator() };
+    var thread_safe_gpa = std.heap.ThreadSafeAllocator{
+        .child_allocator = gpa.allocator(),
+    };
     const ally = thread_safe_gpa.allocator();
+    var f = try abc(ally);
+    var c = f.get_node("C").?;
+
+    while (c.api.collect(rt.units.BitRate.default)) |packet| {
+        std.debug.print("{any}\n", .{packet});
+    }
+
+    try std.testing.expect(true);
+    try std.testing.expect(true);
+}
+
+fn abc(ally: Allocator) !Framework {
     var f = Framework.init(ally, .{});
     const names = [_][]const u8{ "A", "B", "C" };
 
@@ -25,9 +41,5 @@ pub fn main() !void {
         try f.process();
     }
 
-    const c = f.get_node("C").?;
-
-    while (c.api.collect(rt.units.BitRate.default)) |packet| {
-        std.debug.print("{any}\n", .{packet});
-    }
+    return f;
 }

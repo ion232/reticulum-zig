@@ -15,7 +15,7 @@ pub fn init() Self {
 pub fn advance(self: *Self, count: u64, unit: Unit) void {
     const factor: u64 = switch (unit) {
         .s => 1,
-        .ms => 1000,
+        .ms => 1_000,
         .us => 1_000_000,
         .ns => 1_000_000_000,
     };

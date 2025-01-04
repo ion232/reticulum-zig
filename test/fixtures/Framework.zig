@@ -108,6 +108,7 @@ pub fn add_node(self: *Self, name: []const u8) !void {
 
     var node = try rt.Node.init(self.ally, self.system, self.options);
     const api = try node.addInterface(.{});
+
     try self.nodes.append(Node{
         .node = node,
         .endpoints = std.ArrayList(rt.Endpoint).init(self.ally),

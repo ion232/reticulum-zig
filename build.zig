@@ -4,17 +4,57 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const tests = b.addTest(.{
-        .root_source_file = b.path("src"),
+    const reticulum = b.addModule("reticulum", .{
+        .root_source_file = b.path("src/reticulum.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const run_tests = b.addRunArtifact(tests);
-    const test_step = b.step("test", "Run tests.");
-    test_step.dependOn(&run_tests.step);
+    const test_step = b.step("test", "Run all tests.");
 
-    _ = b.addModule("reticulum", .{
-        .root_source_file = b.path("src/reticulum.zig"),
-    });
+    // Unit tests.
+    {
+        const unit_tests_step = b.step("unit-tests", "Run unit tests.");
+        const t = b.addTest(.{
+            .name = "lib",
+            .root_source_file = b.path("src/reticulum.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        unit_tests_step.dependOn(&b.addRunArtifact(t).step);
+        test_step.dependOn(unit_tests_step);
+    }
+
+    // Integration tests.
+    {
+        const integration_tests_step = b.step("integration-tests", "Run integration tests.");
+        const integration_tests = .{
+            "announce",
+            "data",
+        };
+        const imports = .{
+            .{ .name = "reticulum", .module = reticulum },
+        };
+
+        const fixtures = b.createModule(.{
+            .root_source_file = b.path("test/fixtures.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &imports,
+        });
+
+        inline for (integration_tests) |name| {
+            const t = b.addTest(.{
+                .name = name,
+                .root_source_file = b.path("test/integration/" ++ name ++ ".zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            t.root_module.addImport("fixtures", fixtures);
+            t.root_module.addImport("reticulum", reticulum);
+            integration_tests_step.dependOn(&b.addRunArtifact(t).step);
+        }
+
+        test_step.dependOn(integration_tests_step);
+    }
 }

@@ -96,7 +96,11 @@ pub const Api = struct {
         try self.send(packet);
     }
 
-    // pub fn data(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {}
+    // pub fn data(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {
+    //     const engine: *Self = @ptrCast(@alignCast(self.ptr));
+    //     const packet = try engine.packet_factory.make_announce(endpoint: *const Endpoint, application_data: ?[]const u8);
+    //     try self.send(packet);
+    // }
 
     pub fn deliver_raw(self: *@This(), raw_bytes: []const u8) Error!void {
         return self.deliverRawFn(self.ptr, raw_bytes);
