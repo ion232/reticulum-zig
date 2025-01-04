@@ -30,7 +30,6 @@ pub fn build(b: *std.Build) void {
         const integration_tests_step = b.step("integration-tests", "Run integration tests.");
         const integration_tests = .{
             "announce",
-            "data",
         };
         const imports = .{
             .{ .name = "reticulum", .module = reticulum },
