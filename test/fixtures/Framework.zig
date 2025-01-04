@@ -12,7 +12,7 @@ pub const Error = error{
 const Node = struct {
     node: rt.Node,
     endpoints: std.ArrayList(rt.Endpoint),
-    api: rt.interface.Engine.Api,
+    api: rt.Interface.Api,
 };
 
 const Self = @This();

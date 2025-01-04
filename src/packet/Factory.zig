@@ -5,7 +5,7 @@ const packet = @import("../packet.zig");
 const Allocator = std.mem.Allocator;
 const Rng = @import("../System.zig").Rng;
 const Clock = @import("../System.zig").Clock;
-const InterfaceConfig = @import("../interface.zig").Config;
+const Interface = @import("../Interface.zig");
 const Bytes = std.ArrayList(u8);
 const Endpoint = @import("../endpoint.zig").Managed;
 const Builder = @import("Builder.zig");
@@ -22,14 +22,14 @@ const Self = @This();
 ally: Allocator,
 clock: Clock,
 rng: Rng,
-interface: InterfaceConfig,
+config: Interface.Config,
 
-pub fn init(ally: Allocator, clock: Clock, rng: Rng, interface: InterfaceConfig) Self {
+pub fn init(ally: Allocator, clock: Clock, rng: Rng, config: Interface.Config) Self {
     return Self{
         .ally = ally,
         .clock = clock,
         .rng = rng,
-        .interface = interface,
+        .config = config,
     };
 }
 
@@ -44,8 +44,8 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
     const header: packet.Header = @bitCast(bytes[0..header_size].*);
     index += header_size;
 
-    const both_auth = self.interface.access_code != null and header.interface == .authenticated;
-    const both_not_auth = self.interface.access_code == null and header.interface == .open;
+    const both_auth = self.config.access_code != null and header.interface == .authenticated;
+    const both_not_auth = self.config.access_code == null and header.interface == .open;
     const non_matching_auth = !both_auth or !both_not_auth;
 
     if (non_matching_auth) {
@@ -57,7 +57,7 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
         interface_access_code.deinit();
     }
 
-    if (self.interface.access_code) |access_code| {
+    if (self.config.access_code) |access_code| {
         if (bytes.len < index + access_code.len) {
             return Error.InvalidBytesLength;
         }
@@ -196,7 +196,7 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
 
     var builder = Builder.init(self.ally);
 
-    if (self.interface.access_code) |interface_access_code| {
+    if (self.config.access_code) |interface_access_code| {
         _ = try builder.set_interface_access_code(interface_access_code);
     }
 

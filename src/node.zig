@@ -1,5 +1,4 @@
 const std = @import("std");
-const interface = @import("interface.zig");
 
 pub const Element = @import("node/Element.zig");
 pub const Options = @import("node/Options.zig");
@@ -9,6 +8,7 @@ const BitRate = @import("units.zig").BitRate;
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
+const Interface = @import("Interface.zig");
 const Packet = @import("packet.zig").Packet;
 const PacketFactory = @import("packet.zig").Factory;
 const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
@@ -22,7 +22,7 @@ pub const Error = error{
 
 const Route = struct {
     timestamp: u64,
-    interface_id: interface.Id,
+    interface_id: Interface.Id,
     next_hop: Hash.Short,
     hops: u8,
     // More fields.
@@ -35,9 +35,9 @@ system: System,
 options: Options,
 mutex: std.Thread.Mutex,
 endpoints: EndpointStore,
-interfaces: std.AutoHashMap(interface.Id, *interface.Engine),
+interfaces: std.AutoHashMap(Interface.Id, *Interface),
 routes: std.StringHashMap(Route),
-current_interface_id: interface.Id,
+current_interface_id: Interface.Id,
 
 pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!Self {
     return .{
@@ -46,7 +46,7 @@ pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!S
         .options = options,
         .mutex = .{},
         .endpoints = EndpointStore.init(ally),
-        .interfaces = std.AutoHashMap(interface.Id, *interface.Engine).init(ally),
+        .interfaces = std.AutoHashMap(Interface.Id, *Interface).init(ally),
         .routes = std.StringHashMap(Route).init(ally),
         .current_interface_id = 0,
     };
@@ -67,7 +67,7 @@ pub fn deinit(self: *Self) void {
     self.routes.deinit();
 }
 
-pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engine.Api {
+pub fn addInterface(self: *Self, config: Interface.Config) Error!Interface.Api {
     self.mutex.lock();
 
     defer {
@@ -81,20 +81,20 @@ pub fn addInterface(self: *Self, config: interface.Config) Error!interface.Engin
     const id = self.current_interface_id;
     self.current_interface_id += 1;
 
-    const incoming = try self.ally.create(interface.Engine.Incoming);
-    const outgoing = try self.ally.create(interface.Engine.Outgoing);
-    incoming.* = try interface.Engine.Incoming.init(self.ally);
-    outgoing.* = try interface.Engine.Outgoing.init(self.ally);
+    const incoming = try self.ally.create(Interface.Incoming);
+    const outgoing = try self.ally.create(Interface.Outgoing);
+    incoming.* = try Interface.Incoming.init(self.ally);
+    outgoing.* = try Interface.Outgoing.init(self.ally);
     const packet_factory = PacketFactory.init(self.ally, self.system.clock, self.system.rng, config);
 
-    const engine = try self.ally.create(interface.Engine);
-    engine.* = try interface.Engine.init(self.ally, config, id, incoming, outgoing, packet_factory);
+    const engine = try self.ally.create(Interface);
+    engine.* = try Interface.init(self.ally, config, id, incoming, outgoing, packet_factory);
     try self.interfaces.put(id, engine);
 
     return engine.api();
 }
 
-pub fn removeInterface(self: *Self, id: interface.Id) Error!void {
+pub fn removeInterface(self: *Self, id: Interface.Id) Error!void {
     self.mutex.lock();
 
     defer {
