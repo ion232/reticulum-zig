@@ -1,6 +1,19 @@
 .{
     .name = "reticulum",
     .version = "0.1.0",
-    .dependencies = .{},
-    .paths = .{"."},
+    .minimum_zig_version = "0.13.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "README.md",
+        "src/",
+    },
+    .dependencies = .{
+        // TODO: Use in integration testing.
+        // .ohsnap = .{
+        //     .url = "https://github.com/mnemnion/ohsnap/archive/refs/tags/v0.3.1.tar.gz",
+        //     .hash = "1220380908ede3cce3dafb2e69b4994a3df55a468597d9d571a495c66ad38ac73ef8",
+        // },
+    },
 }
