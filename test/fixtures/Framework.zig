@@ -27,7 +27,6 @@ nodes: std.ArrayList(Node),
 
 pub fn init(ally: Allocator, options: rt.Node.Options) Self {
     var clock = Clock.init();
-    var rng = rt.System.Os.Rng.init();
 
     return Self{
         .ally = ally,
@@ -35,7 +34,7 @@ pub fn init(ally: Allocator, options: rt.Node.Options) Self {
         .clock = clock,
         .system = rt.System{
             .clock = clock.clock(),
-            .rng = rng.rng(),
+            .rng = std.crypto.random,
         },
         .indices = std.StringHashMap(usize).init(ally),
         .edges = std.ArrayList(std.AutoHashMap(usize, void)).init(ally),
@@ -43,7 +42,7 @@ pub fn init(ally: Allocator, options: rt.Node.Options) Self {
     };
 }
 
-pub fn add_endpoint(self: *Self, name: []const u8) !rt.Endpoint {
+pub fn addEndpoint(self: *Self, name: []const u8) !rt.Endpoint {
     const identity = try rt.Identity.random(&self.system.rng);
     var builder = rt.endpoint.Builder.init(self.ally);
     _ = try builder
@@ -62,14 +61,14 @@ pub fn add_endpoint(self: *Self, name: []const u8) !rt.Endpoint {
     return endpoint;
 }
 
-pub fn get_node(self: *Self, name: []const u8) ?*Node {
+pub fn getNode(self: *Self, name: []const u8) ?*Node {
     const index = self.indices.get(name) orelse return null;
     return &self.nodes.items[index];
 }
 
 pub fn send(self: *Self, src: []const u8, dst: []const u8, data: []const u8) !void {
-    const n1 = self.get_node(src) orelse return;
-    const n2 = self.get_node(dst) orelse return;
+    const n1 = self.getNode(src) orelse return;
+    const n2 = self.getNode(dst) orelse return;
     const e1 = n1.endpoints.getLast();
     const e2 = n2.endpoints.getLast();
 
@@ -97,7 +96,7 @@ pub fn process(self: *Self) !void {
     }
 }
 
-pub fn add_node(self: *Self, name: []const u8) !void {
+pub fn addNode(self: *Self, name: []const u8) !void {
     if (self.indices.contains(name)) {
         return Error.DuplicateName;
     }

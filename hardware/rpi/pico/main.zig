@@ -19,7 +19,7 @@ pub const microzig_options = .{
     .logFn = rp2.uart.logFn,
 };
 
-var heap: [16_000]u8 = .{0} ** 16000;
+var heap: [16_000]u8 = .{0} ** 16_000;
 
 pub fn main() !void {
     var led = Led.init(25);

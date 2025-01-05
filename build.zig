@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const core = .{
-        .name = "reticulum-core",
+        .name = "reticulum",
         .module = b.addModule("reticulum-core", .{
             .root_source_file = b.path("core/reticulum.zig"),
             .target = target,
