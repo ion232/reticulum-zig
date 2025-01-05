@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const core = .{
         .name = "reticulum-core",
         .module = b.addModule("reticulum-core", .{
-            .root_source_file = b.path("src/reticulum.zig"),
+            .root_source_file = b.path("core/reticulum.zig"),
             .target = target,
             .optimize = optimize,
         }),
@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         const unit_tests_step = b.step("unit-tests", "Run unit tests.");
         const t = b.addTest(.{
             .name = "lib",
-            .root_source_file = b.path("src/reticulum.zig"),
+            .root_source_file = b.path("core/reticulum.zig"),
             .target = target,
             .optimize = optimize,
         });
