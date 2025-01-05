@@ -7,9 +7,9 @@ const devices = .{
 
 pub fn build(b: *std.Build) void {
     inline for (devices) |device| {
-        const DeviceSpec = Spec(device);
-        const spec = DeviceSpec.init(b).?;
-        const step = b.step(DeviceSpec.name, DeviceSpec.description);
+        const spec = Spec(device).init(b).?;
+        const metadata = Spec(device).metadata;
+        const step = b.step(metadata.name, metadata.description);
         spec.build(b);
         step.dependOn(spec.micro_build.builder.getInstallStep());
     }
@@ -22,15 +22,12 @@ fn Spec(comptime device: Device) type {
             .pico => .{ .rp2xxx = true },
         });
         const Target = mz.Target;
-
-        const name = switch (device) {
-            .pico => "pico",
-        };
-        const description = switch (device) {
-            .pico => "Raspberry Pi Pico",
-        };
-        const root_dir = switch (device) {
-            .pico => "rpi/pico",
+        const metadata = switch (device) {
+            .pico => .{
+                .name = "pico",
+                .description = "Raspberry Pi Pico",
+                .root_dir = "rpi/pico",
+            },
         };
 
         micro_build: *MicroBuild,
@@ -55,10 +52,10 @@ fn Spec(comptime device: Device) type {
             const optimize = b.standardOptimizeOption(.{});
 
             const firmware = self.micro_build.add_firmware(.{
-                .name = "reticulum-" ++ Self.name,
+                .name = "reticulum-" ++ Self.metadata.name,
                 .target = self.target,
                 .optimize = optimize,
-                .root_source_file = b.path(Self.root_dir ++ "/main.zig"),
+                .root_source_file = b.path(Self.metadata.root_dir ++ "/main.zig"),
             });
 
             const reticulum_core = b.dependency("reticulum", .{ .optimize = optimize }).module("reticulum-core");
