@@ -1,9 +1,7 @@
 const std = @import("std");
 const rt = @import("reticulum");
 const fixtures = @import("fixtures");
-const ohsnap = @import("ohsnap");
-
-test {}
+// const ohsnap = @import("ohsnap");
 
 test {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

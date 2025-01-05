@@ -175,7 +175,7 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
     announce.public = endpoint.identity.public;
     announce.name_hash = endpoint.name_hash.name().*;
     self.rng.bytes(&announce.noise);
-    announce.timestamp = @truncate(std.mem.nativeToBig(u64, self.clock.monotonicNanos()));
+    announce.timestamp = @truncate(std.mem.nativeToBig(u64, self.clock.monotonicMicros()));
     announce.application_data = Bytes.init(self.ally);
 
     if (application_data) |data| {

@@ -52,14 +52,16 @@ fn Spec(comptime device: Device) type {
         }
 
         fn build(self: Self, b: *std.Build) void {
+            const optimize = b.standardOptimizeOption(.{});
+
             const firmware = self.micro_build.add_firmware(.{
                 .name = "reticulum-" ++ Self.name,
                 .target = self.target,
-                .optimize = b.standardOptimizeOption(.{}),
+                .optimize = optimize,
                 .root_source_file = b.path(Self.root_dir ++ "/main.zig"),
             });
 
-            const reticulum_core = b.dependency("reticulum", .{}).module("reticulum-core");
+            const reticulum_core = b.dependency("reticulum", .{ .optimize = optimize }).module("reticulum-core");
             firmware.add_app_import("reticulum", reticulum_core, .{});
 
             self.micro_build.install_firmware(firmware, .{});

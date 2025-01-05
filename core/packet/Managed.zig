@@ -60,7 +60,7 @@ pub fn validate(self: *Self) !bool {
 
 // TODO: Make this take a Writer interface.
 // Make sure to encrypt the packet with the interface access code here.
-pub fn write(self: *Self, buffer: []u8) []u8 {
+pub fn write(self: *const Self, buffer: []u8) []u8 {
     if (buffer.len < self.size()) {
         return &.{};
     }
@@ -146,7 +146,7 @@ pub fn hash(self: *const Self) Hash {
     };
 }
 
-pub fn size(self: *Self) usize {
+pub fn size(self: *const Self) usize {
     var total_size: usize = 0;
 
     total_size += @sizeOf(@TypeOf(self.header));

@@ -22,7 +22,7 @@ pub fn advance(self: *Self, count: u64, unit: Unit) void {
     self.timestamp += (factor * count);
 }
 
-pub fn monotonicNanos(ptr: *anyopaque) u64 {
+pub fn monotonicMicros(ptr: *anyopaque) u64 {
     const self: *Self = @ptrCast(@alignCast(ptr));
     return self.timestamp;
 }
@@ -30,6 +30,6 @@ pub fn monotonicNanos(ptr: *anyopaque) u64 {
 pub fn clock(self: *Self) rt.System.Clock {
     return .{
         .ptr = self,
-        .monotonicNanosFn = monotonicNanos,
+        .monotonicMicrosFn = monotonicMicros,
     };
 }

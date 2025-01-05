@@ -117,7 +117,7 @@ pub fn process(self: *Self) !void {
         self.mutex.unlock();
     }
 
-    const now = self.system.clock.monotonicNanos();
+    const now = self.system.clock.monotonicMicros();
     try self.process_incoming(now);
     try self.process_outgoing(now);
 }
