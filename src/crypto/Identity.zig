@@ -1,4 +1,5 @@
-const errors = @import("std").crypto.errors;
+const std = @import("std");
+const errors = std.crypto.errors;
 const X25519 = @import("X25519.zig");
 const Ed25519 = @import("Ed25519.zig");
 const Hash = @import("Hash.zig");
@@ -41,8 +42,8 @@ pub fn random(rng: *Rng) !Self {
     rng.bytes(&dh_seed);
     rng.bytes(&signature_seed);
 
-    const dh = try X25519.KeyPair.create(dh_seed);
-    const signature = try Ed25519.KeyPair.create(signature_seed);
+    const dh = try X25519.makeKeyPair(dh_seed);
+    const signature = try Ed25519.makeKeyPair(signature_seed);
 
     const public = Public{
         .dh = dh.public_key,
@@ -64,14 +65,15 @@ pub fn random(rng: *Rng) !Self {
 
 // pub fn decrypt(self: *const Self, data: []u8) void {}
 
-pub fn signer(self: *const Self) Error!Ed25519.Signer {
+pub fn signer(self: *const Self, rng: *Rng) Error!Ed25519.Signer {
     if (self.secret) |s| {
         const key_pair = Ed25519.KeyPair{
             .public_key = self.public.signature,
             .secret_key = s.signature,
         };
-        const no_noise = null;
-        return try key_pair.signer(no_noise);
+        var noise: [Ed25519.noise_length]u8 = undefined;
+        rng.bytes(&noise);
+        return try Ed25519.signer(key_pair, noise);
     }
 
     return Error.MissingSecretKey;

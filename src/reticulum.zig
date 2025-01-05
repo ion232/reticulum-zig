@@ -1,5 +1,4 @@
 pub const crypto = @import("crypto.zig");
-pub const driver = @import("driver.zig");
 pub const endpoint = @import("endpoint.zig");
 pub const packet = @import("packet.zig");
 pub const units = @import("units.zig");

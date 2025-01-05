@@ -1,9 +1,9 @@
 const std = @import("std");
 const rt = @import("reticulum");
 const fixtures = @import("fixtures");
+const ohsnap = @import("ohsnap");
 
-const Allocator = std.mem.Allocator;
-const Framework = fixtures.Framework;
+test {}
 
 test {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -17,13 +17,10 @@ test {
     while (c.api.collect(rt.units.BitRate.default)) |packet| {
         std.debug.print("{any}\n", .{packet});
     }
-
-    try std.testing.expect(true);
-    try std.testing.expect(true);
 }
 
-fn abc(ally: Allocator) !Framework {
-    var f = Framework.init(ally, .{});
+fn abc(ally: std.mem.Allocator) !fixtures.Framework {
+    var f = fixtures.Framework.init(ally, .{});
     const names = [_][]const u8{ "A", "B", "C" };
 
     for (names) |name| {

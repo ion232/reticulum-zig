@@ -1,0 +1,19 @@
+.{
+    .name = "reticulum_hw",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.13.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+        "rpi/pico/",
+    },
+    .dependencies = .{
+        .reticulum = .{
+            .path = "../",
+        },
+        .microzig = .{
+            .path = "./microzig",
+        },
+    },
+}

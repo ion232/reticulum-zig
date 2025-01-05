@@ -183,7 +183,7 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
     }
 
     announce.signature = blk: {
-        var signer = try endpoint.identity.signer();
+        var signer = try endpoint.identity.signer(&self.rng);
         signer.update(endpoint.hash.short());
         signer.update(announce.public.dh[0..]);
         signer.update(announce.public.signature.bytes[0..]);

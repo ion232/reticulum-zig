@@ -24,6 +24,7 @@ pub const Payload = union(enum) {
             total += crypto.Hash.name_length;
             total += 5;
             total += 5;
+            total += crypto.Ed25519.Signature.encoded_length;
             break :blk total;
         };
 
@@ -39,6 +40,24 @@ pub const Payload = union(enum) {
     announce: Announce,
     raw: Bytes,
     none,
+
+    pub fn size(self: @This()) usize {
+        return switch (self) {
+            .announce => |*a| blk: {
+                var total: usize = 0;
+                total += crypto.X25519.public_length;
+                total += crypto.Ed25519.PublicKey.encoded_length;
+                total += crypto.Hash.name_length;
+                total += 5;
+                total += 5;
+                total += crypto.Ed25519.Signature.encoded_length;
+                total += a.application_data.items.len;
+                break :blk total;
+            },
+            .raw => |*r| r.items.len,
+            .none => 0,
+        };
+    }
 };
 
 pub const Endpoints = union(Header.Flag.Format) {

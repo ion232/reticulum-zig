@@ -60,35 +60,70 @@ pub fn validate(self: *Self) !bool {
 
 // TODO: Make this take a Writer interface.
 // Make sure to encrypt the packet with the interface access code here.
-pub fn write(self: *Self, buffer: []u8) !void {
+pub fn write(self: *Self, buffer: []u8) []u8 {
     if (buffer.len < self.size()) {
-        return;
+        return &.{};
     }
 
-    var i = 0;
+    var i: usize = 0;
 
     const header_size = @sizeOf(@TypeOf(self.header));
-    @memcpy(buffer[i .. i + header_size], &self.header);
+    @memcpy(buffer[i .. i + header_size], std.mem.asBytes(&self.header));
     i += header_size;
 
-    if (self.ifac != null) {
-        @memcpy(buffer[i .. i + self.ifac.?.len], self.ifac.?);
-        i += self.ifac.?.len;
+    if (self.interface_access_code.items.len > 0) {
+        @memcpy(buffer[i .. i + self.interface_access_code.items.len], self.interface_access_code.items[0..self.interface_access_code.items.len]);
+        i += self.interface_access_code.items.len;
     }
 
-    @memcpy(buffer[i .. i + self.endpoint.len], self.endpoint);
-    i += self.endpoint.len;
-
-    if (self.other_endpoint != null) {
-        @memcpy(buffer[i .. i + self.other_endpoint.?.len], self.other_endpoint.?);
-        i += self.other_endpoint.?.len;
+    switch (self.endpoints) {
+        .normal => |*n| {
+            @memcpy(buffer[i .. i + n.endpoint.len], &n.endpoint);
+            i += n.endpoint.len;
+        },
+        .transport => |*t| {
+            @memcpy(buffer[i .. i + t.transport_id.len], &t.transport_id);
+            i += t.transport_id.len;
+            @memcpy(buffer[i .. i + t.endpoint.len], &t.endpoint);
+            i += t.endpoint.len;
+        },
     }
 
     const context_size = @sizeOf(@TypeOf(self.context));
-    @memcpy(buffer[i .. i + context_size], &self.context);
+    @memcpy(buffer[i .. i + context_size], std.mem.asBytes(&self.context));
     i += context_size;
 
-    @memcpy(buffer[i .. i + self.payload.len], self.payload);
+    switch (self.payload) {
+        .announce => |*a| {
+            // public: Identity.Public,
+            // name_hash: Hash.Name,
+            // noise: Noise,
+            // timestamp: Timestamp,
+            // // rachet: ?*const [N]u8,
+            // signature: crypto.Ed25519.Signature,
+            // application_data: Bytes,
+            @memcpy(buffer[i .. i + a.public.dh.len], &a.public.dh);
+            i += a.public.dh.len;
+            @memcpy(buffer[i .. i + a.name_hash.len], &a.name_hash);
+            i += a.name_hash.len;
+            @memcpy(buffer[i .. i + a.noise.len], &a.noise);
+            i += a.noise.len;
+            const timestamp_bytes = std.mem.asBytes(&a.timestamp);
+            @memcpy(buffer[i .. i + timestamp_bytes.len], timestamp_bytes);
+            i += timestamp_bytes.len;
+            @memcpy(buffer[i .. i + crypto.Ed25519.Signature.encoded_length], &a.signature.toBytes());
+            i += crypto.Ed25519.Signature.encoded_length;
+            @memcpy(buffer[i .. i + a.application_data.items.len], a.application_data.items);
+            i += a.application_data.items.len;
+        },
+        .raw => |*r| {
+            @memcpy(buffer[i .. i + r.items.len], r.items);
+            i += r.items.len;
+        },
+        .none => {},
+    }
+
+    return buffer[0..i];
 }
 
 pub fn hash(self: *const Self) Hash {
@@ -117,11 +152,11 @@ pub fn size(self: *Self) usize {
     total_size += @sizeOf(@TypeOf(self.header));
     total_size += self.interface_access_code.items.len;
     total_size += switch (self.endpoints) {
-        .normal => |*n| n.endpoint.items.len,
-        .transport => |*t| t.transport_id.items.len + t.endpoint.items.len,
+        .normal => |*n| n.endpoint.len,
+        .transport => |*t| t.transport_id.len + t.endpoint.len,
     };
     total_size += @sizeOf(@TypeOf(self.context));
-    total_size += self.payload.len;
+    total_size += self.payload.size();
 
     return total_size;
 }

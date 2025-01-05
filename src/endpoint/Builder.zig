@@ -62,9 +62,9 @@ pub fn set_application_name(self: *Self, application_name: []const u8) !*Self {
 }
 
 pub fn append_aspect(self: *Self, aspect: []const u8) !*Self {
-    const managed_aspect = Bytes.init(self.ally);
+    var managed_aspect = Bytes.init(self.ally);
     try managed_aspect.appendSlice(aspect);
-    self.aspects.append(managed_aspect);
+    try self.aspects.append(managed_aspect);
     return self;
 }
 

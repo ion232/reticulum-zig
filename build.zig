@@ -4,11 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const reticulum = b.addModule("reticulum", .{
-        .root_source_file = b.path("src/reticulum.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const core = .{
+        .name = "reticulum-core",
+        .module = b.addModule("reticulum-core", .{
+            .root_source_file = b.path("src/reticulum.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    };
 
     const test_step = b.step("test", "Run all tests.");
 
@@ -32,7 +35,7 @@ pub fn build(b: *std.Build) void {
             "announce",
         };
         const imports = .{
-            .{ .name = "reticulum", .module = reticulum },
+            core,
         };
 
         const fixtures = b.createModule(.{
@@ -42,6 +45,8 @@ pub fn build(b: *std.Build) void {
             .imports = &imports,
         });
 
+        // const ohsnap = b.dependency("ohsnap", .{});s
+
         inline for (integration_tests) |name| {
             const t = b.addTest(.{
                 .name = name,
@@ -50,7 +55,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
             t.root_module.addImport("fixtures", fixtures);
-            t.root_module.addImport("reticulum", reticulum);
+            t.root_module.addImport(core.name, core.module);
             integration_tests_step.dependOn(&b.addRunArtifact(t).step);
         }
 
