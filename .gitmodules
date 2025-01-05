@@ -1,4 +1,3 @@
-[submodule "hw/microzig"]
-	path = hw/microzig
+[submodule "hardware/microzig"]
+	path = hardware/microzig
 	url = git@github.com:ZigEmbeddedGroup/microzig.git
-	shallow = true
