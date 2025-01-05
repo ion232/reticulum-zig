@@ -81,7 +81,7 @@ pub fn build(self: *Self) Error!Managed {
 
     if (self.fields.count() == self.fields.capacity()) {
         const name_hash = blk: {
-            // TODO: Do this incrementally without copying. Needs to handle the runtime number of dots.
+            // TODO: Do this incrementally without copying.
             var name_bytes = Bytes.init(self.ally);
             try name_bytes.appendSlice(self.application_name.items);
 

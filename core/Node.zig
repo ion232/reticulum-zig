@@ -128,7 +128,6 @@ fn process_incoming(self: *Self, now: u64) !void {
     while (iterator.next()) |entry| {
         var incoming = entry.value_ptr.*.incoming;
         while (incoming.pop()) |element| {
-            std.debug.print("incoming packet\n", .{});
             var packet = element.packet;
             var header = packet.header;
             // defer {
@@ -149,10 +148,6 @@ fn process_incoming(self: *Self, now: u64) !void {
             if (header.purpose == .announce) {
                 const endpoint_hash = packet.endpoints.endpoint();
                 const next_hop = packet.endpoints.next_hop();
-
-                // TODO: Check for hash collisions I suppose.
-                // TODO: Remember packet.
-                // TODO: Remember ratchet.
 
                 try self.routes.put(&endpoint_hash, Route{
                     .timestamp = now,
@@ -176,12 +171,12 @@ fn process_outgoing(self: *Self, now: u64) !void {
             const endpoint = packet.endpoints.endpoint();
 
             if (packet.header.purpose == .announce) {
-                // Broadcast to all interfaces.
-                // var interfaces = self.interfaces.valueIterator();
-                // while (interfaces.next()) |ife| {
-                //     try ife.*.outgoing.push(.{ .packet = packet });
-                // }
-                // std.debug.print("Got an announce!\n", .{});
+                var interfaces = self.interfaces.valueIterator();
+                while (interfaces.next()) |interface| {
+                    if (entry.value_ptr != interface) {
+                        interface.outgoing.push(.{ .packet = packet });
+                    }
+                }
                 return;
             }
 

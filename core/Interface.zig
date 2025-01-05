@@ -38,7 +38,6 @@ incoming: *Incoming,
 outgoing: *Outgoing,
 for_collection: ForCollection,
 packet_factory: PacketFactory,
-// TODO: Replace this with an announce handling class potentially.
 bit_rate: BitRate,
 
 pub fn init(
@@ -105,12 +104,6 @@ pub const Api = struct {
         try self.send(packet);
     }
 
-    // pub fn data(self: *@This(), endpoint_hash: Hash.Short, data: []const u8) !void {
-    //     const engine: *Self = @ptrCast(@alignCast(self.ptr));
-    //     const packet = try engine.packet_factory.make_announce(endpoint: *const Endpoint, application_data: ?[]const u8);
-    //     try self.send(packet);
-    // }
-
     pub fn deliver_raw(self: *@This(), raw_bytes: []const u8) Error!void {
         return self.deliverRawFn(self.ptr, raw_bytes);
     }
@@ -126,7 +119,4 @@ pub const Api = struct {
     pub fn collect(self: *@This(), current_bit_rate: BitRate) ?Packet {
         return self.collectFn(self.ptr, current_bit_rate);
     }
-
-    // Should I use this, or use the packet factory instead?
-    // pub fn builder(self: *@This()) PacketBuilder {}
 };

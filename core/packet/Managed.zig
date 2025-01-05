@@ -95,13 +95,6 @@ pub fn write(self: *const Self, buffer: []u8) []u8 {
 
     switch (self.payload) {
         .announce => |*a| {
-            // public: Identity.Public,
-            // name_hash: Hash.Name,
-            // noise: Noise,
-            // timestamp: Timestamp,
-            // // rachet: ?*const [N]u8,
-            // signature: crypto.Ed25519.Signature,
-            // application_data: Bytes,
             @memcpy(buffer[i .. i + a.public.dh.len], &a.public.dh);
             i += a.public.dh.len;
             @memcpy(buffer[i .. i + a.name_hash.len], &a.name_hash);

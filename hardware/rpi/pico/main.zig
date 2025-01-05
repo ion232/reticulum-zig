@@ -1,3 +1,5 @@
+// Adapted from the microzig usb_cdc example.
+
 const std = @import("std");
 const rt = @import("reticulum");
 const microzig = @import("microzig");

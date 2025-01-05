@@ -167,7 +167,6 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
     };
 }
 
-// TODO: Make this more efficient.
 // TODO: Add ratchet.
 pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
     var announce: packet.Payload.Announce = undefined;

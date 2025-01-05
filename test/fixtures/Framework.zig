@@ -113,8 +113,6 @@ pub fn addNode(self: *Self, name: []const u8) !void {
         .endpoints = std.ArrayList(rt.Endpoint).init(self.ally),
         .api = api,
     });
-
-    // return &self.nodes.items[index];
 }
 
 pub fn connect(self: *Self, a: []const u8, b: []const u8) !void {

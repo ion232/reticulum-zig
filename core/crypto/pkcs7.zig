@@ -115,7 +115,7 @@ test "unpad - just padding block" {
     try t.expectEqual(0, unpadded.len);
 }
 
-// ion232: A value that's too small can't be tested for. I don't think it actually matters though in practice.
+// A value that's too small can't be tested for. I don't think it actually matters though in practice.
 
 test "unpad - value too big" {
     var data: [P.block_length]u8 = undefined;
