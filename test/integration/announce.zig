@@ -1,24 +1,46 @@
 const std = @import("std");
 const rt = @import("reticulum");
-const fixtures = @import("fixtures");
-// const ohsnap = @import("ohsnap");
+const t = std.testing;
+
+const Framework = @import("Framework.zig");
+const Verifier = @import("ohsnap");
 
 test {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var thread_safe_gpa = std.heap.ThreadSafeAllocator{
-        .child_allocator = gpa.allocator(),
-    };
-    const ally = thread_safe_gpa.allocator();
+    const ally = t.allocator;
     var f = try abc(ally);
     var c = f.getNode("C").?;
 
+    const verifier = Verifier{};
+
     while (c.api.collect(rt.units.BitRate.default)) |packet| {
-        std.debug.print("{any}\n", .{packet});
+        const snapshot = verifier.snap(
+            @src(),
+            \\{ 123, 234 }
+            ,
+        );
+        try snapshot.expectEqualFmt(packet);
     }
 }
 
-fn abc(ally: std.mem.Allocator) !fixtures.Framework {
-    var f = fixtures.Framework.init(ally, .{});
+test {
+    // Setup nodes. Don't bother with shared and local instances.
+    // Setup topology.
+    // Send announces as needed.
+    // Check produced packets.
+    // Send other packets.
+    // Check produced packets.
+}
+
+test {
+    // A-B-C.
+    // B is transport node.
+    // A and C are not.
+    // Announce at C gets to A.
+    // Message from A can get to C.
+}
+
+fn abc(ally: std.mem.Allocator) !Framework {
+    var f = Framework.init(ally, .{});
     const names = [_][]const u8{ "A", "B", "C" };
 
     for (names) |name| {

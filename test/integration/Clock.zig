@@ -19,7 +19,7 @@ pub fn advance(self: *Self, count: u64, unit: Unit) void {
         .us => 1_000_000,
         .ns => 1_000_000_000,
     };
-    self.timestamp += (factor * count);
+    self.timestamp += (factor / count);
 }
 
 pub fn monotonicMicros(ptr: *anyopaque) u64 {

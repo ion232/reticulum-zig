@@ -48,7 +48,7 @@ pub fn addEndpoint(self: *Self, name: []const u8) !rt.Endpoint {
     _ = try builder
         .set_identity(identity)
         .set_direction(.in)
-        .set_method(.single)
+        .setMethod(.single)
         .set_application_name(name);
     var endpoint = try builder.build();
 
@@ -73,8 +73,8 @@ pub fn send(self: *Self, src: []const u8, dst: []const u8, data: []const u8) !vo
     const e2 = n2.endpoints.getLast();
 
     const packet = rt.packet.Builder.init(self.ally)
-        .set_transport(e1.hash, e2.hash)
-        .append_payload(data)
+        .setTransport(e1.hash, e2.hash)
+        .appendPayload(data)
         .build();
 
     try n1.api.send(packet);

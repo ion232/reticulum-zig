@@ -28,7 +28,7 @@ pub const Config = struct {
 };
 pub const Error = Incoming.Error || Outgoing.Error || PacketFactory.Error || Allocator.Error;
 
-const ForCollection = std.fifo.LinearFifo(Packet, .Dynamic);
+const ReadyToCollect = std.fifo.LinearFifo(Packet, .Dynamic);
 
 const Self = @This();
 
@@ -36,7 +36,7 @@ ally: Allocator,
 id: Id,
 incoming: *Incoming,
 outgoing: *Outgoing,
-for_collection: ForCollection,
+ready_to_collect: ReadyToCollect,
 packet_factory: PacketFactory,
 bit_rate: BitRate,
 
@@ -47,19 +47,19 @@ pub fn init(
     incoming: *Incoming,
     outgoing: *Outgoing,
     packet_factory: PacketFactory,
-) !Self {
+) Self {
     return Self{
         .ally = ally,
         .id = id,
         .incoming = incoming,
         .outgoing = outgoing,
-        .for_collection = ForCollection.init(ally),
+        .ready_to_collect = ReadyToCollect.init(ally),
         .packet_factory = packet_factory,
         .bit_rate = config.initial_bit_rate,
     };
 }
 
-pub fn deliver_raw(ptr: *anyopaque, bytes: []const u8) !void {
+pub fn deliverRaw(ptr: *anyopaque, bytes: []const u8) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
     const packet = try self.packet_factory.from_bytes(bytes);
     try deliver(ptr, packet);
@@ -78,13 +78,13 @@ pub fn send(ptr: *anyopaque, packet: Packet) !void {
 pub fn collect(ptr: *anyopaque, current_bit_rate: BitRate) ?Packet {
     const self: *Self = @ptrCast(@alignCast(ptr));
     self.bit_rate = current_bit_rate;
-    return self.for_collection.readItem();
+    return self.ready_to_collect.readItem();
 }
 
 pub fn api(self: *Self) Api {
     return Api{
         .ptr = self,
-        .deliverRawFn = deliver_raw,
+        .deliverRawFn = deliverRaw,
         .deliverFn = deliver,
         .sendFn = send,
         .collectFn = collect,
@@ -100,7 +100,7 @@ pub const Api = struct {
 
     pub fn announce(self: *@This(), endpoint: *const Endpoint, application_data: ?[]const u8) Error!void {
         const engine: *Self = @ptrCast(@alignCast(self.ptr));
-        const packet = try engine.packet_factory.make_announce(endpoint, application_data);
+        const packet = try engine.packet_factory.makeAnnounce(endpoint, application_data);
         try self.send(packet);
     }
 

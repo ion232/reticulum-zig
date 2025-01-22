@@ -33,7 +33,7 @@ pub fn init(ally: Allocator, clock: Clock, rng: Rng, config: Interface.Config) S
     };
 }
 
-pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
+pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
     var index: usize = 0;
     const header_size = @sizeOf(packet.Header);
 
@@ -168,7 +168,7 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
 }
 
 // TODO: Add ratchet.
-pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
+pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
     var announce: packet.Payload.Announce = undefined;
 
     announce.public = endpoint.identity.public;
@@ -196,11 +196,11 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
     var builder = Builder.init(self.ally);
 
     if (self.config.access_code) |interface_access_code| {
-        _ = try builder.set_interface_access_code(interface_access_code);
+        _ = try builder.setInterfaceAccessCode(interface_access_code);
     }
 
     return try builder
-        .set_endpoint(endpoint.hash.short().*)
-        .set_payload(.{ .announce = announce })
+        .setEndpoint(endpoint.hash.short().*)
+        .setPayload(.{ .announce = announce })
         .build();
 }

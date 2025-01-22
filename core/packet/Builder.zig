@@ -38,12 +38,12 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn set_header(self: *Self, header: Header) *Self {
+pub fn setHeader(self: *Self, header: Header) *Self {
     self.header = header;
     return self;
 }
 
-pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8) !*Self {
+pub fn setInterfaceAccessCode(self: *Self, interface_access_code: []const u8) !*Self {
     try self.interface_access_code.appendSlice(interface_access_code);
     if (interface_access_code.len > 0) {
         self.header.interface = .authenticated;
@@ -51,7 +51,7 @@ pub fn set_interface_access_code(self: *Self, interface_access_code: []const u8)
     return self;
 }
 
-pub fn set_endpoint(self: *Self, endpoint_hash: Hash.Short) *Self {
+pub fn setEndpoint(self: *Self, endpoint_hash: Hash.Short) *Self {
     self.fields.set(0);
     self.endpoints = .{
         .normal = .{ .endpoint = endpoint_hash },
@@ -60,7 +60,7 @@ pub fn set_endpoint(self: *Self, endpoint_hash: Hash.Short) *Self {
     return self;
 }
 
-pub fn set_transport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.Short) *Self {
+pub fn setTransport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.Short) *Self {
     self.fields.set(0);
     self.endpoints = .{
         .transport = .{
@@ -73,23 +73,23 @@ pub fn set_transport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.
     return self;
 }
 
-pub fn set_method(self: *Self, method: Header.Flag.Method) *Self {
+pub fn setMethod(self: *Self, method: Header.Flag.Method) *Self {
     self.header.method = method;
     return self;
 }
 
-pub fn set_purpose(self: *Self, purpose: Header.Flag.Purpose) *Self {
+pub fn setPurpose(self: *Self, purpose: Header.Flag.Purpose) *Self {
     self.header.purpose = purpose;
     return self;
 }
 
-pub fn set_context(self: *Self, context: Context) *Self {
+pub fn setContext(self: *Self, context: Context) *Self {
     self.context = context;
     self.header.context = .some;
     return self;
 }
 
-pub fn set_payload(self: *Self, payload: Payload) *Self {
+pub fn setPayload(self: *Self, payload: Payload) *Self {
     self.header.purpose = switch (payload) {
         .announce => .announce,
         else => self.header.purpose,
@@ -98,7 +98,7 @@ pub fn set_payload(self: *Self, payload: Payload) *Self {
     return self;
 }
 
-pub fn append_payload(self: *Self, payload: []const u8) !*Self {
+pub fn appendPayload(self: *Self, payload: []const u8) !*Self {
     try self.payload.appendSlice(payload);
     return self;
 }

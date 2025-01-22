@@ -48,7 +48,7 @@ pub fn set_direction(self: *Self, direction: Direction) *Self {
     return self;
 }
 
-pub fn set_method(self: *Self, method: Method) *Self {
+pub fn setMethod(self: *Self, method: Method) *Self {
     self.fields.set(2);
     self.method = method;
     return self;

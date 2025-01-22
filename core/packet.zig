@@ -82,7 +82,7 @@ pub const Endpoints = union(Header.Flag.Format) {
         };
     }
 
-    pub fn next_hop(self: Self) Hash.Short {
+    pub fn nextHop(self: Self) Hash.Short {
         return switch (self) {
             .normal => |n| n.endpoint,
             .transport => |t| t.transport_id,

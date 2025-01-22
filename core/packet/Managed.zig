@@ -31,7 +31,7 @@ pub fn deinit(self: *Self) Self {
     _ = self;
 }
 
-pub fn validate(self: *Self) !bool {
+pub fn validate(self: *Self) !void {
     switch (self.payload) {
         .announce => |a| {
             const endpoint_hash = self.endpoints.endpoint();
@@ -52,9 +52,11 @@ pub fn validate(self: *Self) !bool {
             });
 
             const matching_hashes = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
-            return matching_hashes;
+            if (!matching_hashes) {
+                return error.MismatchingHashes;
+            }
         },
-        else => return true,
+        else => return,
     }
 }
 

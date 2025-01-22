@@ -70,7 +70,7 @@ fn make_announce(ally: std.mem.Allocator, clock: rt.System.Clock, rng: *rt.Syste
     _ = try builder
         .set_identity(identity)
         .set_direction(.in)
-        .set_method(.single)
+        .setMethod(.single)
         .set_application_name("reticulum-pico");
     _ = try builder.append_aspect("test");
     const endpoint = try builder.build();

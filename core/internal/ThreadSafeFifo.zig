@@ -12,7 +12,7 @@ pub fn ThreadSafeFifo(comptime T: type) type {
         mutex: std.Thread.Mutex,
         impl: Impl,
 
-        pub fn init(ally: Allocator) Error!Self {
+        pub fn init(ally: Allocator) Self {
             return Self{
                 .mutex = .{},
                 .impl = Impl.init(ally),
