@@ -31,6 +31,10 @@ pub fn deinit(self: *Self) Self {
     _ = self;
 }
 
+pub fn clone() Self {
+    //
+}
+
 pub fn validate(self: *Self) !void {
     switch (self.payload) {
         .announce => |a| {
@@ -46,7 +50,7 @@ pub fn validate(self: *Self) !void {
             try verifier.verify();
 
             const identity = crypto.Identity.from_public(a.public);
-            const expected_hash = Hash.hash_items(.{
+            const expected_hash = Hash.hashItems(.{
                 .name_hash = a.name_hash,
                 .public_hash = identity.hash.short(),
             });

@@ -36,13 +36,13 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn set_identity(self: *Self, identity: Identity) *Self {
+pub fn setIdentity(self: *Self, identity: Identity) *Self {
     self.fields.set(0);
     self.identity = identity;
     return self;
 }
 
-pub fn set_direction(self: *Self, direction: Direction) *Self {
+pub fn setDirection(self: *Self, direction: Direction) *Self {
     self.fields.set(1);
     self.direction = direction;
     return self;
@@ -54,14 +54,14 @@ pub fn setMethod(self: *Self, method: Method) *Self {
     return self;
 }
 
-pub fn set_application_name(self: *Self, application_name: []const u8) !*Self {
+pub fn setApplicationName(self: *Self, application_name: []const u8) !*Self {
     self.fields.set(3);
     self.application_name = Bytes.init(self.ally);
     try self.application_name.appendSlice(application_name);
     return self;
 }
 
-pub fn append_aspect(self: *Self, aspect: []const u8) !*Self {
+pub fn appendAspect(self: *Self, aspect: []const u8) !*Self {
     var managed_aspect = Bytes.init(self.ally);
     try managed_aspect.appendSlice(aspect);
     try self.aspects.append(managed_aspect);
@@ -106,10 +106,10 @@ pub fn build(self: *Self) Error!Managed {
                 try name_bytes.appendSlice(a.items);
             }
 
-            break :blk Hash.hash_data(name_bytes.items);
+            break :blk Hash.hashData(name_bytes.items);
         };
 
-        const hash = Hash.hash_items(.{
+        const hash = Hash.hashItems(.{
             .name_hash = name_hash.name(),
             .identity_hash = self.identity.hash.short(),
         });

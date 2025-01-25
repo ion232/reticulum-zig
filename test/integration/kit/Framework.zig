@@ -17,7 +17,7 @@ const Interface = struct {
 
 const Node = struct {
     node: rt.Node,
-    interfaces: std.StringHashMap(Interface),
+    interfaces: std.StringHashMap(void),
 };
 
 // Could potentially make this a compile time function instead of a struct.
@@ -90,7 +90,7 @@ pub fn fromTopology(comptime topology: anytype, ally: Allocator) !Self {
                 try framework_interface.to.put(target.name, {});
             }
 
-            try framework_node.interfaces.put(interface_field.name, framework_interface);
+            try framework_node.interfaces.put(interface_field.name, {});
         }
     }
 
@@ -124,7 +124,7 @@ pub fn addEndpoint(self: *Self, name: []const u8) !rt.Endpoint {
 
     if (self.indices.get(name)) |index| {
         var node = self.nodes.items[index];
-        const endpoint_copy = try endpoint.copy();
+        const endpoint_copy = try endpoint.clone();
         try node.endpoints.append(endpoint_copy);
     }
 
@@ -139,19 +139,19 @@ pub fn getNode(self: *Self, name: []const u8) ?*Node {
 pub fn send(self: *Self, src: []const u8, dst: []const u8, data: []const u8) !void {
     const n1 = self.getNode(src) orelse return;
     const n2 = self.getNode(dst) orelse return;
-    const e1 = n1.endpoints.getLast();
-    const e2 = n2.endpoints.getLast();
+    const e1 = n1.endpoints.default;
+    const e2 = n2.endpoints.default;
 
-    const packet = rt.packet.Builder.init(self.ally)
+    const builder = try rt.packet.Builder.init(self.ally)
         .setTransport(e1.hash, e2.hash)
-        .appendPayload(data)
-        .build();
+        .appendPayload(data);
+    const packet = try builder.build();
 
     try n1.api.send(packet);
 }
 
-pub fn process(self: *Self) !void {
-    var indices = self.indices.valueIterator();
+pub fn process(self: *Self, name: []const u8) !void {
+    var indices = self.nodes.valueIterator();
     while (indices.next()) |index| {
         var target = self.nodes.items[index.*];
         try target.node.process();
@@ -169,7 +169,7 @@ pub fn process(self: *Self) !void {
 pub fn collect(self: *Self, node_name: []const u8, interface_name: []const u8) !std.ArrayList(rt.Packet) {
     const packets = std.ArrayList(rt.Packet).init(self.ally);
     const node = self.getNode(node_name).?;
-    const interface = node.interfaces.get(interface_name).?;
+    const interface = self.interfaces.get(interface_name).?;
 
     while (interface.api.collect(rt.unit.BitRate.default)) |packet| {
         packets.put(packet);

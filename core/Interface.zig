@@ -108,12 +108,6 @@ pub const Api = struct {
     sendFn: *const fn (ptr: *anyopaque, packet: Packet) Error!void,
     collectFn: *const fn (ptr: *anyopaque, current_bit_rate: BitRate) ?Packet,
 
-    pub fn announce(self: *@This(), endpoint: *const Endpoint, application_data: ?[]const u8) Error!void {
-        const engine: *Self = @ptrCast(@alignCast(self.ptr));
-        const packet = try engine.packet_factory.makeAnnounce(endpoint, application_data);
-        try self.send(packet);
-    }
-
     pub fn deliver_raw(self: *@This(), raw_bytes: []const u8) Error!void {
         return self.deliverRawFn(self.ptr, raw_bytes);
     }

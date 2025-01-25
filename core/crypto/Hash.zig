@@ -19,11 +19,11 @@ pub fn from_long(hash: Long) Self {
     };
 }
 
-pub fn hash_data(data: []const u8) Self {
-    return hash_items(.{ .data = data });
+pub fn hashData(data: []const u8) Self {
+    return hashItems(.{ .data = data });
 }
 
-pub fn hash_items(items: anytype) Self {
+pub fn hashItems(items: anytype) Self {
     var hash = Self{ .bytes = undefined };
     var hasher = Sha256.init(.{});
 

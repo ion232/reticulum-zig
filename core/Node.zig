@@ -6,6 +6,7 @@ pub const Options = @import("node/Options.zig");
 const Allocator = std.mem.Allocator;
 const BitRate = @import("unit.zig").BitRate;
 const Endpoint = @import("endpoint.zig").Managed;
+const EndpointBuilder = @import("endpoint.zig").Builder;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
 const Interface = @import("Interface.zig");
@@ -19,6 +20,8 @@ pub const Error = error{
     InterfaceNotFound,
     TooManyInterfaces,
     TooManyIncoming,
+    InvalidAnnounceEndpoint,
+    PacketFactory,
 } || Allocator.Error;
 
 const Route = struct {
@@ -37,21 +40,29 @@ mutex: std.Thread.Mutex,
 endpoints: EndpointStore,
 interfaces: std.AutoHashMap(Interface.Id, *Interface),
 routes: std.StringHashMap(Route),
-identity: Identity,
 current_interface_id: Interface.Id,
 
-pub fn init(ally: Allocator, system: System, options: Options) Allocator.Error!Self {
+pub fn init(ally: Allocator, system: System, identity: ?Identity, options: Options) Allocator.Error!Self {
+    const main_identity = identity orelse Identity.random(&system.rng);
+
+    var builder = EndpointBuilder.init(ally);
+    _ = try builder
+        .setIdentity(main_identity)
+        .setDirection(.in)
+        .setMethod(.single)
+        .setApplicationName(options.name);
+
+    const main_endpoint = try builder.build();
+    const endpoints = EndpointStore.init(ally, main_endpoint);
+
     return .{
         .ally = ally,
         .system = system,
         .options = options,
         .mutex = .{},
-        .endpoints = EndpointStore.init(ally),
+        .endpoints = endpoints,
         .interfaces = std.AutoHashMap(Interface.Id, *Interface).init(ally),
         .routes = std.StringHashMap(Route).init(ally),
-        // Obviously this needs sorting.
-        // Identity should probably be passed in and made with rng if null.
-        .identity = undefined,
         .current_interface_id = 0,
     };
 }
@@ -138,6 +149,18 @@ pub fn removeInterface(self: *Self, id: Interface.Id) Error!void {
     }
 
     return Error.InterfaceNotFound;
+}
+
+pub fn announce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!void {
+    try self.endpoints.add(endpoint);
+
+    var interfaces = self.interfaces.iterator();
+
+    while (interfaces.next()) |e| {
+        const interface = e.value_ptr.*;
+        const announce_packet = interface.packet_factory.makeAnnounce(endpoint, application_data) catch return Error.PacketFactory;
+        interface.outgoing.push(announce_packet);
+    }
 }
 
 pub fn process(self: *Self) !void {

@@ -2,6 +2,7 @@ const std = @import("std");
 const crypto = @import("../crypto.zig");
 
 const Allocator = std.mem.Allocator;
+const Builder = @import("Builder.zig");
 const Endpoint = @import("Managed.zig");
 const Identity = crypto.Identity;
 const Interface = @import("../Interface.zig");
@@ -11,28 +12,6 @@ const Hash = crypto.Hash;
 const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
-
-ally: Allocator,
-in: ,
-entries: std.StringHashMap(Entry),
-
-pub fn init(ally: Allocator) Self {
-    return .{
-        .ally = ally,
-        .entries = std.StringHashMap(Entry).init(ally),
-    };
-}
-
-pub fn deinit(self: *Self) void {
-    self.entries.deinit();
-    self.* = undefined;
-}
-
-pub fn add(self: *Self, endpoint: Endpoint) Allocator.Error!void {
-    try self.entries.put(endpoint.hash.bytes[0..], Entry{
-        .endpoint = endpoint,
-    });
-}
 
 const Entry = struct {
     // timestamp: i64,
@@ -48,3 +27,26 @@ const Entry = struct {
     // origin_announce: ...,
     // application_data: []const u8,
 };
+
+ally: Allocator,
+main: Endpoint,
+entries: std.StringHashMap(Entry),
+
+pub fn init(ally: Allocator, main: Endpoint) Self {
+    return Self{
+        .ally = ally,
+        .main = main,
+        .entries = std.StringHashMap(Entry).init(ally),
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.entries.deinit();
+    self.* = undefined;
+}
+
+pub fn add(self: *Self, endpoint: *const Endpoint) Allocator.Error!void {
+    try self.entries.put(endpoint.hash.bytes[0..], Entry{
+        .endpoint = endpoint.clone(),
+    });
+}

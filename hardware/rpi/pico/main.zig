@@ -57,7 +57,7 @@ pub fn main() !void {
 
         const message = serial.read();
         if (message.len > 0) {
-            const hash = rt.crypto.Hash.hash_data(message);
+            const hash = rt.crypto.Hash.hashData(message);
             serial.writeFmt("Your message: {s} => hash {s}\n", .{ message, hash.hex() });
         }
     }
