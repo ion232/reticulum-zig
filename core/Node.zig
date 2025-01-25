@@ -4,7 +4,7 @@ pub const Element = @import("node/Element.zig");
 pub const Options = @import("node/Options.zig");
 
 const Allocator = std.mem.Allocator;
-const BitRate = @import("units.zig").BitRate;
+const BitRate = @import("unit.zig").BitRate;
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointStore = @import("endpoint/Store.zig");
 const Hash = @import("crypto.zig").Hash;
@@ -26,7 +26,6 @@ const Route = struct {
     interface_id: Interface.Id,
     next_hop: Hash.Short,
     hops: u8,
-    // More fields.
 };
 
 const Self = @This();

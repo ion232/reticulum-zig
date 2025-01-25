@@ -13,6 +13,7 @@ const Rng = @import("../System.zig").Rng;
 const Self = @This();
 
 ally: Allocator,
+in: ,
 entries: std.StringHashMap(Entry),
 
 pub fn init(ally: Allocator) Self {

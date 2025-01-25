@@ -1,5 +1,5 @@
 const std = @import("std");
-const BitRate = @import("units.zig").BitRate;
+const BitRate = @import("unit.zig").BitRate;
 
 const Allocator = std.mem.Allocator;
 const Element = @import("Node.zig").Element;
@@ -13,10 +13,20 @@ const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
 // Probably rework this file.
 
 pub const Id = usize;
+pub const Mode = enum {
+    full,
+    point_to_point,
+    access_point,
+    roaming,
+    boundary,
+    gateway,
+};
 pub const Incoming = ThreadSafeFifo(Element.In);
 pub const Outgoing = ThreadSafeFifo(Element.Out);
 pub const Config = struct {
+    name: []const u8 = "unknown",
     access_code: ?[]const u8 = null,
+    mode: Mode = .full,
     initial_bit_rate: BitRate = .{
         .bits = .{
             .count = 1,
@@ -61,7 +71,7 @@ pub fn init(
 
 pub fn deliverRaw(ptr: *anyopaque, bytes: []const u8) !void {
     const self: *Self = @ptrCast(@alignCast(ptr));
-    const packet = try self.packet_factory.from_bytes(bytes);
+    const packet = try self.packet_factory.fromBytes(bytes);
     try deliver(ptr, packet);
 }
 

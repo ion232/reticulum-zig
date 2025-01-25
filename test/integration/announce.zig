@@ -2,24 +2,53 @@ const std = @import("std");
 const rt = @import("reticulum");
 const t = std.testing;
 
-const Framework = @import("Framework.zig");
+const Framework = @import("kit/Framework.zig");
 const Verifier = @import("ohsnap");
+const verifier = Verifier{};
 
 test {
     const ally = t.allocator;
-    var f = try abc(ally);
-    var c = f.getNode("C").?;
+    const topology = .{
+        .a = .{
+            .interfaces = .{
+                .a0 = .{
+                    .to = .{.b0},
+                },
+            },
+        },
+        .b = .{
+            .options = .{
+                .transport_enabled = true,
+                .transport_identity = null,
+                .max_interfaces = 256,
+                .max_incoming_packets = 1024,
+                .max_outgoing_packets = 1024,
+            },
+            .interfaces = .{
+                .b0 = .{
+                    .to = .{.a0},
+                },
+                .b1 = .{
+                    .to = .{.c0},
+                },
+            },
+        },
+        .c = .{
+            .interfaces = .{
+                .c0 = .{
+                    .to = .{.b1},
+                },
+            },
+        },
+    };
 
-    const verifier = Verifier{};
+    var f = try Framework.fromTopology(topology, ally);
 
-    while (c.api.collect(rt.units.BitRate.default)) |packet| {
-        const snapshot = verifier.snap(
-            @src(),
-            \\{ 123, 234 }
-            ,
-        );
-        try snapshot.expectEqualFmt(packet);
-    }
+    try verifier.snap(
+        @src(),
+        \\{ 123, 234 }
+        ,
+    ).expectEqualFmt(f.collect("C", "c0"));
 }
 
 test {
@@ -37,6 +66,7 @@ test {
     // A and C are not.
     // Announce at C gets to A.
     // Message from A can get to C.
+
 }
 
 fn abc(ally: std.mem.Allocator) !Framework {
