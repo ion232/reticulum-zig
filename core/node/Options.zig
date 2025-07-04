@@ -1,6 +1,9 @@
+const Identity = @import("../crypto/Identity.zig");
+
 const Self = @This();
 
+// TODO: Load the version from build.zig.zon.
+name: []const u8 = "reticulum-zig",
 transport_enabled: bool = false,
-max_interfaces: usize = 256,
-max_incoming_packets: usize = 1024,
-max_outgoing_packets: usize = 1024,
+incoming_packets_limit: usize = 1024,
+outgoing_packets_limit: usize = 1024,

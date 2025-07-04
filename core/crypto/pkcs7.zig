@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn Pkcs7(comptime block_size: u8) type {
+pub fn Impl(comptime block_size: u8) type {
     return struct {
         pub const Error = error{
             InvalidLength,
@@ -46,7 +46,7 @@ pub fn Pkcs7(comptime block_size: u8) type {
 }
 
 const t = std.testing;
-const P = Pkcs7(16);
+const P = Impl(16);
 
 test "pad - empty" {
     const data: [0]u8 = undefined;

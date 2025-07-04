@@ -1,8 +1,8 @@
 const std = @import("std");
 const crypto = @import("crypto.zig");
+const data = @import("data.zig");
 
 const Allocator = std.mem.Allocator;
-const Bytes = std.ArrayList(u8);
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointMethod = @import("endpoint.zig").Method;
 const Hash = crypto.Hash;
@@ -14,6 +14,8 @@ pub const Managed = @import("packet/Managed.zig");
 pub const Packet = Managed;
 
 pub const Payload = union(enum) {
+    const Self = @This();
+
     pub const Announce = struct {
         pub const Noise = [5]u8;
         pub const Timestamp = u40;
@@ -22,8 +24,8 @@ pub const Payload = union(enum) {
             total += crypto.X25519.public_length;
             total += crypto.Ed25519.PublicKey.encoded_length;
             total += crypto.Hash.name_length;
-            total += 5;
-            total += 5;
+            total += @sizeOf(Noise);
+            total += @sizeOf(Timestamp);
             total += crypto.Ed25519.Signature.encoded_length;
             break :blk total;
         };
@@ -34,28 +36,61 @@ pub const Payload = union(enum) {
         timestamp: Timestamp,
         // rachet: ?*const [N]u8,
         signature: crypto.Ed25519.Signature,
-        application_data: Bytes,
+        application_data: data.Bytes,
     };
 
     announce: Announce,
-    raw: Bytes,
+    raw: data.Bytes,
     none,
 
-    pub fn size(self: @This()) usize {
+    pub fn makeRaw(bytes: data.Bytes) Self {
+        return Self{
+            .raw = bytes,
+        };
+    }
+
+    pub fn clone(self: Self) !Self {
+        return switch (self) {
+            .announce => |a| Self{
+                .announce = Announce{
+                    .public = a.public,
+                    .name_hash = a.name_hash,
+                    .noise = a.noise,
+                    .timestamp = a.timestamp,
+                    .signature = a.signature,
+                    .application_data = try a.application_data.clone(),
+                },
+            },
+            .raw => |r| Self{
+                .raw = try r.clone(),
+            },
+            .none => Self.none,
+        };
+    }
+
+    pub fn size(self: *const Self) usize {
         return switch (self) {
             .announce => |*a| blk: {
                 var total: usize = 0;
                 total += crypto.X25519.public_length;
                 total += crypto.Ed25519.PublicKey.encoded_length;
                 total += crypto.Hash.name_length;
-                total += 5;
-                total += 5;
+                total += @sizeOf(Announce.Noise);
+                total += @sizeOf(Announce.Timestamp);
                 total += crypto.Ed25519.Signature.encoded_length;
                 total += a.application_data.items.len;
                 break :blk total;
             },
             .raw => |*r| r.items.len,
             .none => 0,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        return switch (self.*) {
+            .announce => |*announce| announce.application_data.deinit(),
+            .raw => |*raw| raw.deinit(),
+            .none => {},
         };
     }
 };
@@ -82,7 +117,7 @@ pub const Endpoints = union(Header.Flag.Format) {
         };
     }
 
-    pub fn next_hop(self: Self) Hash.Short {
+    pub fn nextHop(self: Self) Hash.Short {
         return switch (self) {
             .normal => |n| n.endpoint,
             .transport => |t| t.transport_id,
@@ -132,7 +167,7 @@ pub const Header = packed struct {
 };
 
 pub const Context = enum(u8) {
-    none,
+    none = 0,
     resource,
     resource_advertisement,
     resource_request,
@@ -155,6 +190,6 @@ pub const Context = enum(u8) {
     link_request_proof,
 };
 
-test "Header size" {
+test "header-size" {
     try std.testing.expect(@sizeOf(Header) == 2);
 }

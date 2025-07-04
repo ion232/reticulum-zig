@@ -1,6 +1,7 @@
 pub const Bandwidth = BitRate;
 
 pub const BitRate = struct {
+    pub const none: ?BitRate = null;
     pub const default = BitRate{
         .bits = .{ .count = 1, .prefix = .kilo },
         .rate = .per_second,
