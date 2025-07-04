@@ -1,11 +1,11 @@
 .{
-    .name = "reticulum_hw",
+    .name = .reticulum_boards,
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.14.1",
+    .fingerprint = 0xc2682806322092ca,
     .paths = .{
         "build.zig",
         "build.zig.zon",
-        "README.md",
         "rpi/pico/",
     },
     .dependencies = .{

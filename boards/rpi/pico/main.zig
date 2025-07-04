@@ -57,7 +57,7 @@ pub fn main() !void {
 
         const message = serial.read();
         if (message.len > 0) {
-            const hash = rt.crypto.Hash.hash_data(message);
+            const hash = rt.crypto.Hash.ofData(message);
             serial.writeFmt("Your message: {s} => hash {s}\n", .{ message, hash.hex() });
         }
     }
@@ -70,8 +70,8 @@ fn make_announce(ally: std.mem.Allocator, clock: rt.System.Clock, rng: *rt.Syste
     _ = try builder
         .set_identity(identity)
         .set_direction(.in)
-        .set_method(.single)
-        .set_application_name("reticulum-pico");
+        .setMethod(.single)
+        .set_app_name("reticulum-pico");
     _ = try builder.append_aspect("test");
     const endpoint = try builder.build();
 

@@ -1,28 +1,32 @@
 const std = @import("std");
 const mz = @import("microzig");
 
-const devices = .{
-    .pico,
+const Board = enum {
+    pico,
+
+    const all = .{
+        .pico,
+    };
 };
 
 pub fn build(b: *std.Build) void {
-    inline for (devices) |device| {
-        const spec = Spec(device).init(b).?;
-        const metadata = Spec(device).metadata;
+    inline for (Board.all) |board| {
+        const spec = Spec(board).init(b).?;
+        const metadata = Spec(board).metadata;
         const step = b.step(metadata.name, metadata.description);
         spec.build(b);
         step.dependOn(spec.micro_build.builder.getInstallStep());
     }
 }
 
-fn Spec(comptime device: Device) type {
+fn Spec(comptime board: Board) type {
     return struct {
         const Self = @This();
-        const MicroBuild = mz.MicroBuild(switch (device) {
+        const MicroBuild = mz.MicroBuild(switch (board) {
             .pico => .{ .rp2xxx = true },
         });
         const Target = mz.Target;
-        const metadata = switch (device) {
+        const metadata = switch (board) {
             .pico => .{
                 .name = "pico",
                 .description = "Raspberry Pi Pico",
@@ -36,7 +40,7 @@ fn Spec(comptime device: Device) type {
         fn init(b: *std.Build) ?Self {
             const mz_dep = b.dependency("microzig", .{});
 
-            switch (device) {
+            switch (board) {
                 .pico => {
                     const micro_build = MicroBuild.init(b, mz_dep) orelse return null;
 
@@ -66,7 +70,3 @@ fn Spec(comptime device: Device) type {
         }
     };
 }
-
-const Device = enum {
-    pico,
-};
