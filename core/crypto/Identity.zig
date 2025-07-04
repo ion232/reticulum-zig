@@ -79,12 +79,12 @@ pub fn signer(self: *const Self, rng: *Rng) Error!Ed25519.Signer {
     return Error.MissingSecretKey;
 }
 
-pub fn has_secret(self: *Self) bool {
+pub fn hasSecret(self: *Self) bool {
     return self.secret != null;
 }
 
 fn make_hash(public: Public) Hash {
-    return Hash.hash_items(.{
+    return Hash.ofItems(.{
         .dh = public.dh,
         .signature = public.signature.bytes,
     });

@@ -1,6 +1,10 @@
 const rt = @import("reticulum");
 
-pub const Unit = enum { s, ms, us, ns };
+pub const Unit = enum {
+    seconds,
+    milliseconds,
+    microseconds,
+};
 
 const Self = @This();
 
@@ -14,12 +18,11 @@ pub fn init() Self {
 
 pub fn advance(self: *Self, count: u64, unit: Unit) void {
     const factor: u64 = switch (unit) {
-        .s => 1,
+        .s => 1_000_000,
         .ms => 1_000,
-        .us => 1_000_000,
-        .ns => 1_000_000_000,
+        .us => 1,
     };
-    self.timestamp += (factor * count);
+    self.timestamp += (count * factor);
 }
 
 pub fn monotonicMicros(ptr: *anyopaque) u64 {

@@ -1,9 +1,9 @@
 const std = @import("std");
 const crypto = @import("../crypto.zig");
+const data = @import("../data.zig");
 const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
-const Bytes = std.ArrayList(u8);
 const Header = packet.Header;
 const Context = packet.Context;
 const Endpoints = packet.Endpoints;
@@ -13,25 +13,39 @@ const Hash = crypto.Hash;
 const Self = @This();
 
 ally: Allocator,
-header: Header = undefined,
-interface_access_code: Bytes,
-endpoints: Endpoints = undefined,
-context: Context = undefined,
+header: Header,
+interface_access_code: data.Bytes,
+endpoints: Endpoints,
+context: Context,
 payload: Payload,
 
 pub fn init(ally: Allocator) Self {
     return Self{
         .ally = ally,
-        .interface_access_code = Bytes.init(ally),
+        .header = undefined,
+        .interface_access_code = data.Bytes.init(ally),
+        .endpoints = undefined,
+        .context = undefined,
         .payload = .none,
     };
 }
 
-pub fn deinit(self: *Self) Self {
-    _ = self;
+pub fn deinit(self: *Self) void {
+    self.interface_access_code.deinit();
+    self.payload.deinit();
 }
 
-pub fn validate(self: *Self) !bool {
+pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
+    self.header.format = .transport;
+    self.endpoints = Endpoints{
+        .transport = Endpoints.Transport{
+            .transport_id = transport_id.*,
+            .endpoint = self.endpoints.endpoint(),
+        },
+    };
+}
+
+pub fn validate(self: *const Self) !void {
     switch (self.payload) {
         .announce => |a| {
             const endpoint_hash = self.endpoints.endpoint();
@@ -46,20 +60,22 @@ pub fn validate(self: *Self) !bool {
             try verifier.verify();
 
             const identity = crypto.Identity.from_public(a.public);
-            const expected_hash = Hash.hash_items(.{
+            const expected_hash = Hash.ofItems(.{
                 .name_hash = a.name_hash,
                 .public_hash = identity.hash.short(),
             });
 
             const matching_hashes = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
-            return matching_hashes;
+            if (!matching_hashes) {
+                return error.MismatchingHashes;
+            }
         },
-        else => return true,
+        else => return,
     }
 }
 
 // TODO: Make this take a Writer interface.
-// Make sure to encrypt the packet with the interface access code here.
+// TODO: Make sure to encrypt the packet with the interface access code here.
 pub fn write(self: *const Self, buffer: []u8) []u8 {
     if (buffer.len < self.size()) {
         return &.{};
@@ -123,13 +139,13 @@ pub fn hash(self: *const Self) Hash {
     const header: u8 = std.mem.bytesAsSlice(u4, self.header)[1];
 
     return switch (self.endpoints) {
-        .normal => |normal| Hash.from_items(.{
+        .normal => |normal| Hash.fromItems(.{
             .header = header,
             .endpoint = normal.endpoint,
             .context = self.context,
             .payload = self.payload,
         }),
-        .transport => |transport| Hash.from_items(.{
+        .transport => |transport| Hash.fromItems(.{
             .header = header,
             .transport_id = transport.transport_id,
             .endpoint = transport.endpoint,
@@ -152,4 +168,15 @@ pub fn size(self: *const Self) usize {
     total_size += self.payload.size();
 
     return total_size;
+}
+
+pub fn clone(self: *const Self) !Self {
+    return Self{
+        .ally = self.ally,
+        .context = self.context,
+        .endpoints = self.endpoints,
+        .header = self.header,
+        .interface_access_code = try self.interface_access_code.clone(),
+        .payload = try self.payload.clone(),
+    };
 }

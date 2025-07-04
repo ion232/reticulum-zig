@@ -2,15 +2,6 @@
 
 An implementation of [Reticulum](https://github.com/markqvist/Reticulum) in [Zig](https://ziglang.org/) targeting operating systems and embedded devices.
 
-# Roadmap
-
-- Implement core transport.
-- Test core transport.
-- Implement a transport node pico build.
-- Test transport node pico build.
-- Implement app.
-- Test app.
-
 # Structure
 
 ## App
@@ -26,14 +17,13 @@ An implementation of [Reticulum](https://github.com/markqvist/Reticulum) in [Zig
 - The crypto implementation currently leverages std.crypto from the zig std library.
 - Eventually I will provide an option to use OpenSSL.
 
-## Hardware
+## Boards
 
-- `hardware/` stores image setups for embedded devices that users can build with one command.
+- `boards/` stores image setups for embedded devices that users can build with one command.
 - Makes use of [microzig](https://github.com/ZigEmbeddedGroup/microzig) as a submodule for targeting embedded devices.
 - Currently there is a very simple proof of concept for the pico.
 - It makes an identity, endpoint and announce packet and sends it over serial.
-- The image can be built by running `zig build -Doptimize=ReleaseSafe pico` from `hardware`.
-- Note that the upstream USB CBC code is known to be buggy.
+- The image can be built by running `zig build -Doptimize=ReleaseSafe pico` from `boards`.
 
 ## Test
 
@@ -53,3 +43,7 @@ An implementation of [Reticulum](https://github.com/markqvist/Reticulum) in [Zig
 # Anti-goals
 
 - Exact parity to reference implementation in terminology/structure.
+
+# Licence
+
+- Currently under Apache 2.0 for now; if I move over to the Reticulum licence at some point, it will only be after significant thought and consideration.

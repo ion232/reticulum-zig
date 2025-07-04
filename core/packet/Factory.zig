@@ -1,13 +1,14 @@
 const std = @import("std");
 const crypto = @import("../crypto.zig");
+const data = @import("../data.zig");
 const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
 const Rng = @import("../System.zig").Rng;
 const Clock = @import("../System.zig").Clock;
 const Interface = @import("../Interface.zig");
-const Bytes = std.ArrayList(u8);
 const Endpoint = @import("../endpoint.zig").Managed;
+const Name = @import("../endpoint.zig").Name;
 const Builder = @import("Builder.zig");
 const Packet = @import("Managed.zig");
 
@@ -16,6 +17,7 @@ const Packet = @import("Managed.zig");
 pub const Error = error{
     InvalidBytesLength,
     InvalidAuthentication,
+    MissingIdentity,
 } || crypto.Identity.Error || Builder.Error || Allocator.Error;
 const Self = @This();
 
@@ -33,7 +35,7 @@ pub fn init(ally: Allocator, clock: Clock, rng: Rng, config: Interface.Config) S
     };
 }
 
-pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
+pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
     var index: usize = 0;
     const header_size = @sizeOf(packet.Header);
 
@@ -52,7 +54,7 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
         return Error.InvalidAuthentication;
     }
 
-    var interface_access_code = Bytes.init(self.ally);
+    var interface_access_code = data.Bytes.init(self.ally);
     errdefer {
         interface_access_code.deinit();
     }
@@ -62,7 +64,7 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
             return Error.InvalidBytesLength;
         }
 
-        // I need to decrypt the packet here.
+        // TODO: I need to decrypt the packet here.
 
         try interface_access_code.appendSlice(bytes[index .. index + access_code.len]);
         index += access_code.len;
@@ -141,14 +143,14 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
             announce.signature = Signature.fromBytes(signature_bytes);
             index += Signature.encoded_length;
 
-            var application_data = Bytes.init(self.ally);
+            var application_data = data.Bytes.init(self.ally);
             try application_data.appendSlice(bytes[index..]);
             announce.application_data = application_data;
 
             break :blk announce;
         } },
         else => .{ .raw = blk: {
-            var raw = Bytes.init(self.ally);
+            var raw = data.Bytes.init(self.ally);
             errdefer {
                 raw.deinit();
             }
@@ -168,21 +170,22 @@ pub fn from_bytes(self: *Self, bytes: []const u8) Error!Packet {
 }
 
 // TODO: Add ratchet.
-pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
+pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
+    const identity = endpoint.identity orelse return Error.MissingIdentity;
     var announce: packet.Payload.Announce = undefined;
 
-    announce.public = endpoint.identity.public;
-    announce.name_hash = endpoint.name_hash.name().*;
+    announce.public = identity.public;
+    announce.name_hash = endpoint.name.hash.name().*;
     self.rng.bytes(&announce.noise);
     announce.timestamp = @truncate(std.mem.nativeToBig(u64, self.clock.monotonicMicros()));
-    announce.application_data = Bytes.init(self.ally);
+    announce.application_data = data.Bytes.init(self.ally);
 
-    if (application_data) |data| {
-        try announce.application_data.appendSlice(data);
+    if (application_data) |app_data| {
+        try announce.application_data.appendSlice(app_data);
     }
 
     announce.signature = blk: {
-        var signer = try endpoint.identity.signer(&self.rng);
+        var signer = try identity.signer(&self.rng);
         signer.update(endpoint.hash.short());
         signer.update(announce.public.dh[0..]);
         signer.update(announce.public.signature.bytes[0..]);
@@ -196,11 +199,27 @@ pub fn make_announce(self: *Self, endpoint: *const Endpoint, application_data: ?
     var builder = Builder.init(self.ally);
 
     if (self.config.access_code) |interface_access_code| {
-        _ = try builder.set_interface_access_code(interface_access_code);
+        _ = try builder.setInterfaceAccessCode(interface_access_code);
     }
 
     return try builder
-        .set_endpoint(endpoint.hash.short().*)
-        .set_payload(.{ .announce = announce })
+        .setEndpoint(endpoint.hash.short().*)
+        .setPayload(.{ .announce = announce })
         .build();
+}
+
+pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet {
+    var builder = Builder.init(self.ally);
+
+    if (self.config.access_code) |interface_access_code| {
+        _ = try builder.setInterfaceAccessCode(interface_access_code);
+    }
+
+    const plain = try builder
+        .setMethod(.plain)
+        .setEndpoint(name.hash.short().*)
+        .setPayload(payload)
+        .build();
+
+    return plain;
 }

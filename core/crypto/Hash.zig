@@ -1,4 +1,6 @@
 const std = @import("std");
+const data = @import("../data.zig");
+
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 const Self = @This();
@@ -19,11 +21,12 @@ pub fn from_long(hash: Long) Self {
     };
 }
 
-pub fn hash_data(data: []const u8) Self {
-    return hash_items(.{ .data = data });
+pub fn ofData(bytes: []const u8) Self {
+    return ofItems(.{ .bytes = bytes });
 }
 
-pub fn hash_items(items: anytype) Self {
+// TODO: Refactor out magic values and handle more cases.
+pub fn ofItems(items: anytype) Self {
     var hash = Self{ .bytes = undefined };
     var hasher = Sha256.init(.{});
 
@@ -31,17 +34,17 @@ pub fn hash_items(items: anytype) Self {
         const value = @field(items, field.name);
         switch (@TypeOf(value)) {
             []const u8, []u8 => hasher.update(value),
-            []const std.ArrayList(u8) => |lists| {
-                for (lists) |l| {
-                    hasher.update(l.items);
+            []const data.Bytes => |bytes_list| {
+                for (bytes_list) |bytes| {
+                    hasher.update(bytes.items);
                 }
             },
             *const Long => hasher.update(value),
             *const Short => hasher.update(value),
             *const Name => hasher.update(value),
+            [long_length]u8 => hasher.update(&value),
+            [name_length]u8 => hasher.update(&value),
             else => switch (@typeInfo(@TypeOf(value))) {
-                .Int => hasher.update(std.mem.asBytes(&value)),
-                .Array => |_| hasher.update(std.mem.sliceAsBytes(value[0..])),
                 else => @compileError("Unsupported type: " ++ @typeName(@TypeOf(value))),
             },
         }
