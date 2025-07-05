@@ -1,7 +1,9 @@
 const std = @import("std");
+const data = @import("../data.zig");
 const errors = std.crypto.errors;
+
 const X25519 = @import("X25519.zig");
-const Ed25519 = @import("Ed25519.zig");
+const Ed25519 = std.crypto.sign.Ed25519;
 const Hash = @import("Hash.zig");
 const Rng = @import("../System.zig").Rng;
 
@@ -27,11 +29,11 @@ public: Public,
 secret: ?Secret,
 hash: Hash,
 
-pub fn from_public(public: Public) Self {
+pub fn fromPublic(public: Public) Self {
     return .{
         .public = public,
         .secret = null,
-        .hash = make_hash(public),
+        .hash = makeHash(public),
     };
 }
 
@@ -43,7 +45,7 @@ pub fn random(rng: *Rng) !Self {
     rng.bytes(&signature_seed);
 
     const dh = try X25519.makeKeyPair(dh_seed);
-    const signature = try Ed25519.makeKeyPair(signature_seed);
+    const signature = try Ed25519.KeyPair.generateDeterministic(signature_seed);
 
     const public = Public{
         .dh = dh.public_key,
@@ -57,7 +59,7 @@ pub fn random(rng: *Rng) !Self {
     return .{
         .public = public,
         .secret = secret,
-        .hash = make_hash(public),
+        .hash = makeHash(public),
     };
 }
 
@@ -65,15 +67,14 @@ pub fn random(rng: *Rng) !Self {
 
 // pub fn decrypt(self: *const Self, data: []u8) void {}
 
-pub fn signer(self: *const Self, rng: *Rng) Error!Ed25519.Signer {
-    if (self.secret) |s| {
+pub fn sign(self: *const Self, bytes: data.Bytes) Error!Ed25519.Signature {
+    if (self.secret) |secret| {
         const key_pair = Ed25519.KeyPair{
             .public_key = self.public.signature,
-            .secret_key = s.signature,
+            .secret_key = secret.signature,
         };
-        var noise: [Ed25519.noise_length]u8 = undefined;
-        rng.bytes(&noise);
-        return try Ed25519.signer(key_pair, noise);
+        const noise = null;
+        return try key_pair.sign(bytes.items, noise);
     }
 
     return Error.MissingSecretKey;
@@ -83,7 +84,7 @@ pub fn hasSecret(self: *Self) bool {
     return self.secret != null;
 }
 
-fn make_hash(public: Public) Hash {
+fn makeHash(public: Public) Hash {
     return Hash.ofItems(.{
         .dh = public.dh,
         .signature = public.signature.bytes,
