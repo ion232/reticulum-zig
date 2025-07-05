@@ -59,7 +59,7 @@ pub fn validate(self: *const Self) !void {
             verifier.update(a.application_data.items);
             try verifier.verify();
 
-            const identity = crypto.Identity.from_public(a.public);
+            const identity = crypto.Identity.fromPublic(a.public);
             const expected_hash = Hash.ofItems(.{
                 .name_hash = a.name_hash,
                 .public_hash = identity.hash.short(),

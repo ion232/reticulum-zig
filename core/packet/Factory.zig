@@ -185,15 +185,19 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
     }
 
     announce.signature = blk: {
-        var signer = try identity.signer(&self.rng);
-        signer.update(endpoint.hash.short());
-        signer.update(announce.public.dh[0..]);
-        signer.update(announce.public.signature.bytes[0..]);
-        signer.update(announce.name_hash[0..]);
-        signer.update(announce.noise[0..]);
-        signer.update(&std.mem.toBytes(announce.timestamp));
-        signer.update(announce.application_data.items);
-        break :blk signer.finalize();
+        var arena = std.heap.ArenaAllocator.init(self.ally);
+        defer {
+            arena.deinit();
+        }
+        var bytes = data.Bytes.init(arena.allocator());
+        try bytes.appendSlice(endpoint.hash.short());
+        try bytes.appendSlice(announce.public.dh[0..]);
+        try bytes.appendSlice(announce.public.signature.bytes[0..]);
+        try bytes.appendSlice(announce.name_hash[0..]);
+        try bytes.appendSlice(announce.noise[0..]);
+        try bytes.appendSlice(&std.mem.toBytes(announce.timestamp));
+        try bytes.appendSlice(announce.application_data.items);
+        break :blk try identity.sign(bytes);
     };
 
     var builder = Builder.init(self.ally);
