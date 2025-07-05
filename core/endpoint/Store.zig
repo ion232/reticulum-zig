@@ -2,7 +2,6 @@ const std = @import("std");
 const crypto = @import("../crypto.zig");
 
 const Allocator = std.mem.Allocator;
-const Builder = @import("Builder.zig");
 const Endpoint = @import("Managed.zig");
 const Identity = crypto.Identity;
 const Interface = @import("../Interface.zig");
@@ -30,42 +29,76 @@ const Entry = struct {
 
 ally: Allocator,
 main: Endpoint,
-entries: std.StringHashMap(Entry),
+entries: std.StringArrayHashMap(Entry),
 
-pub fn init(ally: Allocator, main: Endpoint) !Self {
-    var entries = std.StringHashMap(Entry).init(ally);
-    try entries.put(main.hash.bytes[0..], Entry{
-        .endpoint = main,
-    });
-
-    return Self{
+pub fn init(ally: Allocator, main: *const Endpoint) !Self {
+    var self = Self{
         .ally = ally,
-        .main = main,
-        .entries = entries,
+        .main = try main.clone(),
+        .entries = std.StringArrayHashMap(Entry).init(ally),
     };
-}
 
-pub fn getPtr(self: *Self, hash: Hash) ?*const Endpoint {
-    if (self.entries.get(hash.bytes[0..])) |entry| {
-        return &entry.endpoint;
-    }
+    try self.add(main);
 
-    return null;
+    return self;
 }
 
 pub fn add(self: *Self, endpoint: *const Endpoint) !void {
-    try self.entries.put(endpoint.hash.bytes[0..], Entry{
+    const h = endpoint.hash.short().*;
+    const key = try self.ally.dupe(u8, &h);
+    try self.entries.put(key, Entry{
         .endpoint = try endpoint.clone(),
     });
 }
 
-pub fn deinit(self: *Self) void {
-    var entries = self.entries.valueIterator();
+pub fn has(self: *Self, hash: *const Hash.Short) bool {
+    return self.get(hash) != null;
+}
 
-    while (entries.next()) |entry| {
-        entry.endpoint.deinit();
+pub fn get(self: *Self, hash: *const Hash.Short) ?*const Endpoint {
+    if (self.entries.get(hash[0..])) |entry| {
+        return &entry.endpoint;
+    }
+    return null;
+}
+
+pub fn deinit(self: *Self) void {
+    var entries = self.entries.iterator();
+    while (entries.next()) |*entry| {
+        self.ally.free(entry.key_ptr.*);
+        entry.value_ptr.endpoint.deinit();
     }
 
     self.entries.deinit();
+    self.main.deinit();
     self.* = undefined;
+}
+
+test "main" {
+    const t = std.testing;
+    const Builder = @import("Builder.zig");
+    const Name = @import("Name.zig");
+
+    const ally = t.allocator;
+    var main_endpoint = blk: {
+        var builder = Builder.init(ally);
+        defer builder.deinit();
+
+        var rng = std.crypto.random;
+        const endpoint = try builder
+            .setIdentity(try Identity.random(&rng))
+            .setName(try Name.init("endpoint", &.{"main"}, ally))
+            .setDirection(.in)
+            .setMethod(.single)
+            .build();
+
+        break :blk endpoint;
+    };
+    defer main_endpoint.deinit();
+
+    var store = try Self.init(ally, &main_endpoint);
+    defer store.deinit();
+
+    const retrieved = store.get(main_endpoint.hash.short()) orelse return error.TestUnexpectedResult;
+    try t.expectEqualSlices(u8, &main_endpoint.hash.bytes, &retrieved.hash.bytes);
 }

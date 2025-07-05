@@ -143,7 +143,9 @@ pub const Out = union(enum) {
                         try f.entry("public.signature", "{x}", .{hex(&a.public.signature.bytes)});
                         try f.entry("name_hash", "{x}", .{hex(&a.name_hash)});
                         try f.entry("noise", "{x}", .{hex(&a.noise)});
-                        try f.entry("timestamp", "{}", .{a.timestamp});
+                        var timestamp_bytes: [5]u8 = undefined;
+                        std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
+                        try f.entry("timestamp", "{x}", .{hex(&timestamp_bytes)});
                         try f.entry("signature", "{x}", .{hex(&a.signature.toBytes())});
 
                         if (a.application_data.items.len > 0) {

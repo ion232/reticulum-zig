@@ -98,13 +98,19 @@ pub fn remove(self: *Self, id: Interface.Id) void {
     }
 }
 
-// TODO: Refactor source_id.
-pub fn propagate(self: *Self, packet: Packet, source_id: ?Interface.Id) !void {
+pub fn transmit(self: *Self, packet: *const Packet, id: Interface.Id) !void {
+    const entry = self.entries.getPtr(id) orelse return Error.InterfaceNotFound;
+    try entry.pending_out.push(.{
+        .packet = try packet.clone(),
+    });
+}
+
+pub fn broadcast(self: *Self, packet: Packet, excluded_id: ?Interface.Id) !void {
     var entries = self.entries.valueIterator();
 
     while (entries.next()) |entry| {
-        if (source_id) |source| {
-            if (entry.interface.id == source) {
+        if (excluded_id) |id| {
+            if (entry.interface.id == id) {
                 continue;
             }
         }

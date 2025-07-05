@@ -10,6 +10,7 @@ const Identity = crypto.Identity;
 
 pub const Builder = @import("packet/Builder.zig");
 pub const Factory = @import("packet/Factory.zig");
+pub const Filter = @import("packet/Filter.zig");
 pub const Managed = @import("packet/Managed.zig");
 pub const Packet = Managed;
 
@@ -125,7 +126,7 @@ pub const Endpoints = union(Header.Flag.Format) {
     }
 };
 
-pub const Header = packed struct {
+pub const Header = packed struct(u16) {
     pub const Flag = struct {
         pub const Interface = enum(u1) {
             open,
@@ -189,7 +190,3 @@ pub const Context = enum(u8) {
     link_request_rtt,
     link_request_proof,
 };
-
-test "header-size" {
-    try std.testing.expect(@sizeOf(Header) == 2);
-}

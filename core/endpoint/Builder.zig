@@ -72,18 +72,18 @@ pub fn build(self: *Self) Error!Managed {
         const name_hash = name.hash.name();
 
         if (self.identity) |identity| {
-            break :blk Hash.ofItems(.{
+            break :blk Hash.of(.{
                 .name_hash = name_hash,
                 .identity_hash = identity.hash.short(),
             });
         } else {
-            break :blk Hash.ofItems(.{
+            break :blk Hash.of(.{
                 .name_hash = name_hash,
             });
         }
     };
 
-    return Managed{
+    const result = Managed{
         .ally = self.ally,
         .identity = self.identity,
         .direction = direction,
@@ -91,10 +91,14 @@ pub fn build(self: *Self) Error!Managed {
         .name = name,
         .hash = hash,
     };
+
+    self.name = null;
+
+    return result;
 }
 
 pub fn deinit(self: *Self) void {
-    if (self.name) |name| {
+    if (self.name) |*name| {
         name.deinit();
     }
 

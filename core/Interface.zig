@@ -23,6 +23,18 @@ pub const Mode = enum {
     roaming,
     boundary,
     gateway,
+
+    pub fn route_lifetime(self: @This()) u64 {
+        const one_day = std.time.us_per_day;
+        const six_hours = 6 * std.time.us_per_hour;
+        const seven_weeks = 7 * std.time.us_per_week;
+
+        return switch (self) {
+            .access_point => one_day,
+            .roaming => six_hours,
+            else => seven_weeks,
+        };
+    }
 };
 pub const Incoming = ThreadSafeFifo(Event.In);
 pub const Outgoing = ThreadSafeFifo(Event.Out);
@@ -47,6 +59,7 @@ id: Id,
 incoming: *Incoming,
 outgoing: *Outgoing,
 packet_factory: PacketFactory,
+mode: Mode,
 bit_rate: ?BitRate,
 
 pub fn init(
@@ -63,6 +76,7 @@ pub fn init(
         .incoming = incoming,
         .outgoing = outgoing,
         .packet_factory = packet_factory,
+        .mode = config.mode,
         .bit_rate = config.initial_bit_rate,
     };
 }

@@ -85,7 +85,7 @@ pub fn hasSecret(self: *Self) bool {
 }
 
 fn makeHash(public: Public) Hash {
-    return Hash.ofItems(.{
+    return Hash.of(.{
         .dh = public.dh,
         .signature = public.signature.bytes,
     });
