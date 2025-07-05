@@ -30,11 +30,6 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn deinit(self: *Self) void {
-    self.interface_access_code.deinit();
-    self.payload.deinit();
-}
-
 pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
     self.header.format = .transport;
     self.endpoints = Endpoints{
@@ -60,7 +55,7 @@ pub fn validate(self: *const Self) !void {
             try verifier.verify();
 
             const identity = crypto.Identity.fromPublic(a.public);
-            const expected_hash = Hash.ofItems(.{
+            const expected_hash = Hash.of(.{
                 .name_hash = a.name_hash,
                 .public_hash = identity.hash.short(),
             });
@@ -136,23 +131,43 @@ pub fn write(self: *const Self, buffer: []u8) []u8 {
 }
 
 pub fn hash(self: *const Self) Hash {
-    const header: u8 = std.mem.bytesAsSlice(u4, self.header)[1];
+    const header = std.mem.asBytes(&self.header);
+    const method_and_purpose: u8 = std.mem.bytesAsSlice(u4, header)[1];
+    const context = @intFromEnum(self.context);
 
-    return switch (self.endpoints) {
-        .normal => |normal| Hash.fromItems(.{
-            .header = header,
+    var hasher = switch (self.endpoints) {
+        .normal => |normal| Hash.incremental(.{
+            .method_and_purpose = method_and_purpose,
             .endpoint = normal.endpoint,
-            .context = self.context,
-            .payload = self.payload,
+            .context = context,
         }),
-        .transport => |transport| Hash.fromItems(.{
-            .header = header,
+        .transport => |transport| Hash.incremental(.{
+            .method_and_purpose = method_and_purpose,
             .transport_id = transport.transport_id,
             .endpoint = transport.endpoint,
-            .context = self.context,
-            .payload = self.payload,
+            .context = context,
         }),
     };
+
+    // Could do with a refactor probably.
+    switch (self.payload) {
+        .announce => |announce| {
+            hasher.update(&announce.public.dh);
+            hasher.update(&announce.public.signature.bytes);
+            hasher.update(&announce.name_hash);
+            hasher.update(&announce.noise);
+            hasher.update(std.mem.asBytes(&announce.timestamp));
+            hasher.update(&announce.signature.r);
+            hasher.update(&announce.signature.s);
+            hasher.update(announce.application_data.items);
+        },
+        .raw => |raw| {
+            hasher.update(raw.items);
+        },
+        .none => {},
+    }
+
+    return Hash.fromLong(hasher.finalResult());
 }
 
 pub fn size(self: *const Self) usize {
@@ -179,4 +194,9 @@ pub fn clone(self: *const Self) !Self {
         .interface_access_code = try self.interface_access_code.clone(),
         .payload = try self.payload.clone(),
     };
+}
+
+pub fn deinit(self: *Self) void {
+    self.interface_access_code.deinit();
+    self.payload.deinit();
 }

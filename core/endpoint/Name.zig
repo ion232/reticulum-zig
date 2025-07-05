@@ -25,8 +25,8 @@ hash: Hash,
 pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) !Self {
     var self = Self{
         .ally = ally,
-        .app_name = .init(ally),
-        .aspects = .init(ally),
+        .app_name = Aspect.init(ally),
+        .aspects = Aspects.init(ally),
         .hash = undefined,
     };
 
@@ -51,9 +51,7 @@ pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) 
         }
 
         var new_aspect = Aspect.init(self.ally);
-        errdefer {
-            new_aspect.deinit();
-        }
+        errdefer new_aspect.deinit();
 
         try new_aspect.appendSlice(aspect);
         try self.aspects.append(new_aspect);
@@ -61,9 +59,7 @@ pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) 
 
     self.hash = blk: {
         var name = data.Bytes.init(self.ally);
-        defer {
-            name.deinit();
-        }
+        defer name.deinit();
 
         try name.appendSlice(app_name);
 
@@ -72,19 +68,21 @@ pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) 
             try name.appendSlice(aspect);
         }
 
-        break :blk Hash.ofData(name.items);
+        break :blk Hash.of(.{
+            .name = name.items,
+        });
     };
 
     return self;
 }
 
-pub fn clone(self: *Self) !Self {
+pub fn clone(self: *const Self) !Self {
     var cloned = self.*;
     cloned.app_name = try cloned.app_name.clone();
     cloned.aspects = Aspects.init(self.ally);
 
-    for (self.aspects) |aspect| {
-        cloned.aspects.append(try aspect.clone());
+    for (self.aspects.items) |aspect| {
+        try cloned.aspects.append(try aspect.clone());
     }
 
     return cloned;
