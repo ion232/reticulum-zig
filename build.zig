@@ -46,12 +46,18 @@ pub fn build(b: *std.Build) void {
 
         const ohsnap = blk: {
             // Root directories map to module names.
+            const name = "root";
+            const root = "test/simulation";
+
             const module_names: []const []const u8 = &.{
-                "root",
+                name,
+                name,
             };
             const root_directory: []const []const u8 = &.{
-                "test/simulation",
+                root,
+                root,
             };
+
             break :blk b.dependency("ohsnap", .{
                 .target = target,
                 .optimize = optimize,
@@ -61,6 +67,7 @@ pub fn build(b: *std.Build) void {
         };
 
         const simulation_tests = .{
+            "announce",
             "plain",
         };
 
@@ -72,7 +79,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
             t.root_module.addImport(core.name, core.module);
-            t.root_module.addImport("ohsnap", ohsnap.module("ohsnap"));
+            t.root_module.addImport("golden", ohsnap.module("ohsnap"));
             simulation_tests_step.dependOn(&b.addRunArtifact(t).step);
         }
     }

@@ -3,6 +3,7 @@ const rt = @import("reticulum");
 
 const Allocator = std.mem.Allocator;
 const ManualClock = @import("ManualClock.zig");
+const SeededRng = @import("SeededRng.zig");
 
 pub const Error = error{
     UnknownName,
@@ -27,22 +28,14 @@ const Node = struct {
 const Self = @This();
 
 ally: Allocator,
-manual_clock: ManualClock,
-prng: std.Random.DefaultPrng,
-system: rt.System,
+system: *rt.System,
 nodes: std.StringHashMap(Node),
 interfaces: std.StringHashMap(Interface),
 
-pub fn init(ally: Allocator) Self {
-    var manual_clock = ManualClock.init();
-
+pub fn init(system: *rt.System, ally: Allocator) Self {
     return Self{
         .ally = ally,
-        .manual_clock = manual_clock,
-        .system = rt.System{
-            .clock = manual_clock.clock(),
-            .rng = std.crypto.random,
-        },
+        .system = system,
         .nodes = std.StringHashMap(Node).init(ally),
         .interfaces = std.StringHashMap(Interface).init(ally),
     };
@@ -70,21 +63,8 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn fromTopology(comptime topology: anytype, ally: Allocator) !Self {
-    var manual_clock = ManualClock.init();
-    var prng = std.Random.DefaultPrng.init(42);
-
-    var self = Self{
-        .ally = ally,
-        .manual_clock = manual_clock,
-        .prng = prng,
-        .system = rt.System{
-            .clock = manual_clock.clock(),
-            .rng = prng.random(),
-        },
-        .nodes = std.StringHashMap(Node).init(ally),
-        .interfaces = std.StringHashMap(Interface).init(ally),
-    };
+pub fn fromTopology(comptime topology: anytype, system: *rt.System, ally: Allocator) !Self {
+    var self = Self.init(system, ally);
 
     inline for (std.meta.fields(@TypeOf(topology))) |node_field| {
         const node = @field(topology, node_field.name);
@@ -140,7 +120,7 @@ pub fn addNode(self: *Self, name: []const u8, options: rt.Node.Options) !*Node {
     }
 
     const node = Node{
-        .node = try rt.Node.init(self.ally, &self.system, null, options),
+        .node = try rt.Node.init(self.ally, self.system, null, options),
         .interfaces = std.StringHashMap(void).init(self.ally),
     };
 
@@ -183,10 +163,6 @@ pub fn step(self: *Self) !void {
     try self.processNodes();
 }
 
-pub fn stepAfter(self: *Self, count: u64, unit: ManualClock.Unit) !void {
-    self.manual_clock.advance(count, unit);
-    try self.step();
-}
 
 pub fn processBuffers(self: *Self) !void {
     var node_names = self.nodes.keyIterator();
