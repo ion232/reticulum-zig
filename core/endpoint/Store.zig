@@ -44,8 +44,7 @@ pub fn init(ally: Allocator, main: *const Endpoint) !Self {
 }
 
 pub fn add(self: *Self, endpoint: *const Endpoint) !void {
-    const h = endpoint.hash.short().*;
-    const key = try self.ally.dupe(u8, &h);
+    const key = try self.ally.dupe(u8, endpoint.hash.short());
     try self.entries.put(key, Entry{
         .endpoint = try endpoint.clone(),
     });
@@ -56,7 +55,7 @@ pub fn has(self: *Self, hash: *const Hash.Short) bool {
 }
 
 pub fn get(self: *Self, hash: *const Hash.Short) ?*const Endpoint {
-    if (self.entries.get(hash[0..])) |entry| {
+    if (self.entries.getPtr(hash[0..])) |entry| {
         return &entry.endpoint;
     }
     return null;
