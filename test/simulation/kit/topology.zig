@@ -10,9 +10,6 @@ pub const abc = .{
     .b = .{
         .options = .{
             .transport_enabled = true,
-            .interface_limit = 256,
-            .incoming_packets_limit = 1024,
-            .outgoing_packets_limit = 1024,
         },
         .interfaces = .{
             .b0 = .{ .to = .a0 },

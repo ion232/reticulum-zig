@@ -1,3 +1,4 @@
+const std = @import("std");
 const rt = @import("reticulum");
 
 pub const Unit = enum {
@@ -18,9 +19,9 @@ pub fn init() Self {
 
 pub fn advance(self: *Self, count: u64, unit: Unit) void {
     const factor: u64 = switch (unit) {
-        .s => 1_000_000,
-        .ms => 1_000,
-        .us => 1,
+        .seconds => 1_000_000,
+        .milliseconds => 1_000,
+        .microseconds => 1,
     };
     self.timestamp += (count * factor);
 }
