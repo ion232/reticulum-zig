@@ -62,7 +62,6 @@ pub fn add(self: *Self, config: Interface.Config) Error!Interface.Api {
 
     const packet_factory = PacketFactory.init(
         self.ally,
-        self.system.clock,
         self.system.rng,
         config,
     );

@@ -25,7 +25,7 @@ hash: Hash,
 pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) !Self {
     var self = Self{
         .ally = ally,
-        .app_name = Aspect.init(ally),
+        .app_name = AppName.init(ally),
         .aspects = Aspects.init(ally),
         .hash = undefined,
     };

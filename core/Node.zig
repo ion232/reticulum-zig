@@ -108,7 +108,7 @@ fn eventsIn(self: *Self, interface: *Interface, now: u64) !void {
         defer event.deinit();
 
         try switch (event) {
-            .announce => |*announce| self.announceTask(interface, announce),
+            .announce => |*announce| self.announceTask(interface, announce, now),
             .packet => |*packet| self.packetIn(interface, packet, now),
             .plain => |*plain| self.plainTask(interface, plain),
         };
@@ -129,7 +129,7 @@ fn eventsOut(self: *Self, interface: *Interface, pending_out: *Interface.Outgoin
     }
 }
 
-fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce) !void {
+fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce, now: u64) !void {
     const endpoint = self.endpoints.get(announce.hash.short()) orelse return;
     const app_data: ?[]const u8 = blk: {
         if (announce.app_data) |app_data| {
@@ -139,7 +139,7 @@ fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce
         }
     };
 
-    var packet = try interface.packet_factory.makeAnnounce(endpoint, app_data);
+    var packet = try interface.packet_factory.makeAnnounce(endpoint, app_data, now);
     defer packet.deinit();
 
     try self.interfaces.broadcast(packet, null);
