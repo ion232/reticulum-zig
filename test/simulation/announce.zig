@@ -1,5 +1,5 @@
+const core = @import("core");
 const std = @import("std");
-const rt = @import("reticulum");
 const t = std.testing;
 const topology = @import("kit/topology.zig");
 
@@ -15,7 +15,7 @@ test "abc" {
 
     var manual_clock = ManualClock.init();
     var seeded_rng = SeededRng.init(seed);
-    var system = rt.System{
+    var system = core.System{
         .clock = manual_clock.clock(),
         .rng = seeded_rng.rng(),
     };
@@ -30,7 +30,7 @@ test "abc" {
     const b1 = s.getInterface("b1").?;
     const c0 = s.getInterface("c0").?;
 
-    const app_data = try rt.data.makeBytes("here is some app data", ally);
+    const app_data = try core.data.makeBytes("here is some app data", ally);
     try a0.api.announce(a.node.mainEndpoint(), app_data);
     try s.stepAfter(10, .microseconds, &manual_clock);
     try t.expect(a0.event_buffer.items.len == 1);

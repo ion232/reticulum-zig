@@ -1,7 +1,7 @@
 // Adapted from the microzig usb_cdc example.
 
 const std = @import("std");
-const rt = @import("reticulum");
+const core = @import("reticulum");
 const microzig = @import("microzig");
 const rp2 = microzig.hal;
 
@@ -57,16 +57,16 @@ pub fn main() !void {
 
         const message = serial.read();
         if (message.len > 0) {
-            const hash = rt.crypto.Hash.ofData(message);
+            const hash = core.crypto.Hash.ofData(message);
             serial.writeFmt("Your message: {s} => hash {s}\n", .{ message, hash.hex() });
         }
     }
 }
 
-fn make_announce(ally: std.mem.Allocator, clock: rt.System.Clock, rng: *rt.System.Rng) !rt.Packet {
-    const identity = try rt.crypto.Identity.random(rng);
+fn make_announce(ally: std.mem.Allocator, clock: core.System.Clock, rng: *core.System.Rng) !core.Packet {
+    const identity = try core.crypto.Identity.random(rng);
 
-    var builder = rt.endpoint.Builder.init(ally);
+    var builder = core.endpoint.Builder.init(ally);
     _ = try builder
         .set_identity(identity)
         .set_direction(.in)
@@ -75,6 +75,6 @@ fn make_announce(ally: std.mem.Allocator, clock: rt.System.Clock, rng: *rt.Syste
     _ = try builder.append_aspect("test");
     const endpoint = try builder.build();
 
-    var packet_factory = rt.packet.Factory.init(ally, clock, rng.*, .{});
+    var packet_factory = core.packet.Factory.init(ally, clock, rng.*, .{});
     return try packet_factory.make_announce(&endpoint, "some application data");
 }

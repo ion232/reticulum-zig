@@ -1,5 +1,5 @@
 const std = @import("std");
-const rt = @import("reticulum");
+const core = @import("reticulum");
 const microzig = @import("microzig");
 const rp2 = microzig.hal;
 
@@ -71,7 +71,7 @@ pub fn task(self: *Self) void {
     UsbDevice.task(no_debug_over_uart) catch unreachable;
 }
 
-pub fn writePacket(self: *Self, packet: *const rt.packet.Packet) void {
+pub fn writePacket(self: *Self, packet: *const core.packet.Packet) void {
     var write_buff: []const u8 = packet.write(&self.tx_buffer);
     while (write_buff.len > 0) {
         write_buff = cdc_driver.write(write_buff);
