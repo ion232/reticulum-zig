@@ -147,7 +147,6 @@ fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce
 
 fn packetIn(self: *Self, interface: *Interface, packet: *Packet, now: u64) !void {
     const header = packet.header;
-    defer packet.deinit();
 
     if (self.shouldDrop(packet)) {
         return;
