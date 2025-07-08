@@ -158,11 +158,15 @@ pub fn getInterface(self: *Self, name: []const u8) ?*Interface {
     return self.interfaces.getPtr(name);
 }
 
+pub fn stepAfter(self: *Self, count: u64, unit: ManualClock.Unit, clock: *ManualClock) !void {
+    clock.advance(count, unit);
+    try self.step();
+}
+
 pub fn step(self: *Self) !void {
     try self.processBuffers();
     try self.processNodes();
 }
-
 
 pub fn processBuffers(self: *Self) !void {
     var node_names = self.nodes.keyIterator();
