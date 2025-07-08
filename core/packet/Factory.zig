@@ -22,14 +22,12 @@ pub const Error = error{
 const Self = @This();
 
 ally: Allocator,
-clock: Clock,
 rng: Rng,
 config: Interface.Config,
 
-pub fn init(ally: Allocator, clock: Clock, rng: Rng, config: Interface.Config) Self {
+pub fn init(ally: Allocator, rng: Rng, config: Interface.Config) Self {
     return Self{
         .ally = ally,
-        .clock = clock,
         .rng = rng,
         .config = config,
     };
@@ -48,16 +46,14 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
 
     const both_auth = self.config.access_code != null and header.interface == .authenticated;
     const both_not_auth = self.config.access_code == null and header.interface == .open;
-    const non_matching_auth = !both_auth or !both_not_auth;
+    const non_matching_auth = !(both_auth or both_not_auth);
 
     if (non_matching_auth) {
         return Error.InvalidAuthentication;
     }
 
     var interface_access_code = data.Bytes.init(self.ally);
-    errdefer {
-        interface_access_code.deinit();
-    }
+    errdefer interface_access_code.deinit();
 
     if (self.config.access_code) |access_code| {
         if (bytes.len < index + access_code.len) {
@@ -120,35 +116,41 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
     index += context_size;
 
     const payload: packet.Payload = switch (header.purpose) {
-        .announce => .{ .announce = blk: {
-            const Announce = packet.Payload.Announce;
-            const Signature = crypto.Ed25519.Signature;
-            var announce: Announce = undefined;
+        .announce => .{
+            .announce = blk: {
+                const Announce = packet.Payload.Announce;
+                const Signature = crypto.Ed25519.Signature;
 
-            if (bytes.len < index + Announce.minimum_size) {
-                return Error.InvalidBytesLength;
-            }
+                var announce: Announce = undefined;
 
-            @memcpy(&announce.public.dh, bytes[index .. index + announce.public.dh.len]);
-            index += announce.public.dh.len;
-            @memcpy(&announce.public.signature.bytes, bytes[index .. index + announce.public.signature.bytes.len]);
-            announce.public.signature = try crypto.Ed25519.PublicKey.fromBytes(announce.public.signature.bytes);
-            index += announce.public.signature.bytes.len;
-            @memcpy(&announce.noise, bytes[index .. index + announce.noise.len]);
-            index += announce.noise.len;
-            announce.timestamp = std.mem.bytesToValue(u40, bytes[index .. index + @sizeOf(Announce.Timestamp)]);
-            index += @sizeOf(Announce.Timestamp);
-            var signature_bytes: [Signature.encoded_length]u8 = undefined;
-            @memcpy(&signature_bytes, bytes[index .. index + Signature.encoded_length]);
-            announce.signature = Signature.fromBytes(signature_bytes);
-            index += Signature.encoded_length;
+                if (bytes.len < index + Announce.minimum_size) {
+                    return Error.InvalidBytesLength;
+                }
 
-            var application_data = data.Bytes.init(self.ally);
-            try application_data.appendSlice(bytes[index..]);
-            announce.application_data = application_data;
+                @memcpy(&announce.public.dh, bytes[index .. index + announce.public.dh.len]);
+                index += announce.public.dh.len;
+                var signature_key_bytes: [crypto.Ed25519.PublicKey.encoded_length]u8 = undefined;
+                @memcpy(&signature_key_bytes, bytes[index .. index + signature_key_bytes.len]);
+                announce.public.signature = try crypto.Ed25519.PublicKey.fromBytes(signature_key_bytes);
+                index += signature_key_bytes.len;
+                @memcpy(&announce.name_hash, bytes[index .. index + announce.name_hash.len]);
+                index += announce.name_hash.len;
+                @memcpy(&announce.noise, bytes[index .. index + announce.noise.len]);
+                index += announce.noise.len;
+                announce.timestamp = std.mem.bytesToValue(u40, bytes[index .. index + @sizeOf(Announce.Timestamp)]);
+                index += @sizeOf(Announce.Timestamp);
+                var signature_bytes: [Signature.encoded_length]u8 = undefined;
+                @memcpy(&signature_bytes, bytes[index .. index + Signature.encoded_length]);
+                announce.signature = Signature.fromBytes(signature_bytes);
+                index += Signature.encoded_length;
 
-            break :blk announce;
-        } },
+                var application_data = data.Bytes.init(self.ally);
+                try application_data.appendSlice(bytes[index..]);
+                announce.application_data = application_data;
+
+                break :blk announce;
+            },
+        },
         else => .{ .raw = blk: {
             var raw = data.Bytes.init(self.ally);
             errdefer {
@@ -170,15 +172,14 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
 }
 
 // TODO: Add ratchet.
-pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8) Error!Packet {
+pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8, now: u64) Error!Packet {
     const identity = endpoint.identity orelse return Error.MissingIdentity;
     var announce: packet.Payload.Announce = undefined;
 
     announce.public = identity.public;
     announce.name_hash = endpoint.name.hash.name().*;
     self.rng.bytes(&announce.noise);
-    // Maybe just pass in the time here?
-    announce.timestamp = @truncate(self.clock.monotonicMicros());
+    announce.timestamp = @truncate(now);
     announce.application_data = data.Bytes.init(self.ally);
 
     if (application_data) |app_data| {
@@ -187,9 +188,8 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
 
     announce.signature = blk: {
         var arena = std.heap.ArenaAllocator.init(self.ally);
-        defer {
-            arena.deinit();
-        }
+        defer arena.deinit();
+
         var bytes = data.Bytes.init(arena.allocator());
         try bytes.appendSlice(endpoint.hash.short());
         try bytes.appendSlice(announce.public.dh[0..]);
@@ -198,6 +198,7 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
         try bytes.appendSlice(announce.noise[0..]);
         try bytes.appendSlice(&std.mem.toBytes(announce.timestamp));
         try bytes.appendSlice(announce.application_data.items);
+
         break :blk try identity.sign(bytes);
     };
 
@@ -227,4 +228,45 @@ pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet 
         .build();
 
     return plain;
+}
+
+test "make-announce-and-validate" {
+    const t = std.testing;
+    const EndpointBuilder = @import("../endpoint.zig").Builder;
+
+    const ally = t.allocator;
+    var rng = std.crypto.random;
+    const config = Interface.Config{};
+
+    var builder = EndpointBuilder.init(ally);
+    defer builder.deinit();
+
+    var endpoint = try builder
+        .setIdentity(try crypto.Identity.random(&rng))
+        .setDirection(.in)
+        .setMethod(.single)
+        .setName(try Name.init("endpoint", &.{"test"}, ally))
+        .build();
+    defer endpoint.deinit();
+
+    const app_data = "some application data";
+    const now = 123456789;
+    var factory1 = Self.init(ally, rng, config);
+    var announce_packet = try factory1.makeAnnounce(&endpoint, app_data, now);
+    defer announce_packet.deinit();
+
+    var packet_bytes = try data.Bytes.initCapacity(ally, announce_packet.size());
+    packet_bytes.expandToCapacity();
+    defer packet_bytes.deinit();
+    const raw_packet = try announce_packet.write(packet_bytes.items);
+
+    var factory2 = Self.init(ally, rng, config);
+    var parsed_packet = try factory2.fromBytes(raw_packet);
+    defer parsed_packet.deinit();
+
+    try t.expect(parsed_packet.header.purpose == .announce);
+    try parsed_packet.validate();
+
+    const announce = parsed_packet.payload.announce;
+    try t.expectEqualStrings(app_data, announce.application_data.items);
 }

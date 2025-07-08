@@ -50,7 +50,7 @@ pub fn validate(self: *const Self) !void {
             verifier.update(&a.public.signature.bytes);
             verifier.update(&a.name_hash);
             verifier.update(&a.noise);
-            verifier.update(std.mem.asBytes(&a.timestamp));
+            verifier.update(&std.mem.toBytes(a.timestamp));
             verifier.update(a.application_data.items);
             try verifier.verify();
 
@@ -60,9 +60,9 @@ pub fn validate(self: *const Self) !void {
                 .public_hash = identity.hash.short(),
             });
 
-            const matching_hashes = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
-            if (!matching_hashes) {
-                return error.MismatchingHashes;
+            const hashes_match = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
+            if (!hashes_match) {
+                return error.MismatchedHashes;
             }
         },
         else => return,
@@ -71,9 +71,9 @@ pub fn validate(self: *const Self) !void {
 
 // TODO: Make this take a Writer interface.
 // TODO: Make sure to encrypt the packet with the interface access code here.
-pub fn write(self: *const Self, buffer: []u8) []u8 {
+pub fn write(self: *const Self, buffer: []u8) ![]u8 {
     if (buffer.len < self.size()) {
-        return &.{};
+        return error.BufferTooSmall;
     }
 
     var i: usize = 0;
@@ -108,6 +108,8 @@ pub fn write(self: *const Self, buffer: []u8) []u8 {
         .announce => |*a| {
             @memcpy(buffer[i .. i + a.public.dh.len], &a.public.dh);
             i += a.public.dh.len;
+            @memcpy(buffer[i .. i + a.public.signature.bytes.len], &a.public.signature.bytes);
+            i += a.public.signature.bytes.len;
             @memcpy(buffer[i .. i + a.name_hash.len], &a.name_hash);
             i += a.name_hash.len;
             @memcpy(buffer[i .. i + a.noise.len], &a.noise);

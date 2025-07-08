@@ -70,7 +70,7 @@ pub const Payload = union(enum) {
     }
 
     pub fn size(self: *const Self) usize {
-        return switch (self) {
+        return switch (self.*) {
             .announce => |*a| blk: {
                 var total: usize = 0;
                 total += crypto.X25519.public_length;
