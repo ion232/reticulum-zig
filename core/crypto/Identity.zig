@@ -90,3 +90,37 @@ fn makeHash(public: Public) Hash {
         .signature = public.signature.bytes,
     });
 }
+
+const t = std.testing;
+
+test "valid-signature" {
+    const allocator = t.allocator;
+    var rng = std.crypto.random;
+    const identity = try Self.random(&rng);
+
+    var message = try data.Bytes.initCapacity(allocator, 0);
+    defer message.deinit();
+
+    try message.appendSlice("this is a message");
+    const signature = try identity.sign(message);
+
+    try signature.verify(message.items, identity.public.signature);
+}
+
+test "invalid-signature" {
+    const allocator = t.allocator;
+    var rng = std.crypto.random;
+    const identity1 = try Self.random(&rng);
+    const identity2 = try Self.random(&rng);
+
+    var message = try data.Bytes.initCapacity(allocator, 0);
+    defer message.deinit();
+
+    try message.appendSlice("this is a message");
+    const signature = try identity1.sign(message);
+
+    try t.expectError(
+        error.SignatureVerificationFailed,
+        signature.verify(message.items, identity2.public.signature),
+    );
+}
