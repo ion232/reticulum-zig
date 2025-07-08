@@ -1,5 +1,5 @@
+const core = @import("core");
 const std = @import("std");
-const rt = @import("reticulum");
 
 const Allocator = std.mem.Allocator;
 const ManualClock = @import("ManualClock.zig");
@@ -11,14 +11,14 @@ pub const Error = error{
 } || Allocator.Error;
 
 const Interface = struct {
-    api: rt.Interface.Api,
-    config: rt.Interface.Config,
+    api: core.Interface.Api,
+    config: core.Interface.Config,
     to: []const u8,
-    event_buffer: std.ArrayList(rt.Node.Event.Out),
+    event_buffer: std.ArrayList(core.Node.Event.Out),
 };
 
 const Node = struct {
-    node: rt.Node,
+    node: core.Node,
     interfaces: std.StringHashMap(void),
 };
 
@@ -28,11 +28,11 @@ const Node = struct {
 const Self = @This();
 
 ally: Allocator,
-system: *rt.System,
+system: *core.System,
 nodes: std.StringHashMap(Node),
 interfaces: std.StringHashMap(Interface),
 
-pub fn init(system: *rt.System, ally: Allocator) Self {
+pub fn init(system: *core.System, ally: Allocator) Self {
     return Self{
         .ally = ally,
         .system = system,
@@ -63,13 +63,13 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn fromTopology(comptime topology: anytype, system: *rt.System, ally: Allocator) !Self {
+pub fn fromTopology(comptime topology: anytype, system: *core.System, ally: Allocator) !Self {
     var self = Self.init(system, ally);
 
     inline for (std.meta.fields(@TypeOf(topology))) |node_field| {
         const node = @field(topology, node_field.name);
         // TODO: Allow for specifying some fields and defaulting others.
-        var node_options: rt.Node.Options = .{};
+        var node_options: core.Node.Options = .{};
         if (@hasField(@TypeOf(node), "options")) {
             const topo_options = node.options;
             if (@hasField(@TypeOf(topo_options), "transport_enabled")) {
@@ -92,7 +92,7 @@ pub fn fromTopology(comptime topology: anytype, system: *rt.System, ally: Alloca
         inline for (std.meta.fields(@TypeOf(node.interfaces))) |interface_field| {
             const interface = @field(node.interfaces, interface_field.name);
             // TODO: Allow for specifying some fields and defaulting others.
-            var interface_config = rt.Interface.Config{};
+            var interface_config = core.Interface.Config{};
             if (@hasField(@TypeOf(interface), "config")) {
                 interface_config = interface.config;
             }
@@ -103,7 +103,7 @@ pub fn fromTopology(comptime topology: anytype, system: *rt.System, ally: Alloca
                 .api = try simulator_node.node.addInterface(interface_config),
                 .config = interface_config,
                 .to = @tagName(interface.to),
-                .event_buffer = std.ArrayList(rt.Node.Event.Out).init(self.ally),
+                .event_buffer = std.ArrayList(core.Node.Event.Out).init(self.ally),
             };
 
             try simulator_node.interfaces.put(interface_field.name, {});
@@ -114,13 +114,13 @@ pub fn fromTopology(comptime topology: anytype, system: *rt.System, ally: Alloca
     return self;
 }
 
-pub fn addNode(self: *Self, name: []const u8, options: rt.Node.Options) !*Node {
+pub fn addNode(self: *Self, name: []const u8, options: core.Node.Options) !*Node {
     if (self.nodes.contains(name)) {
         return Error.DuplicateName;
     }
 
     const node = Node{
-        .node = try rt.Node.init(self.ally, self.system, null, options),
+        .node = try core.Node.init(self.ally, self.system, null, options),
         .interfaces = std.StringHashMap(void).init(self.ally),
     };
 
@@ -129,9 +129,9 @@ pub fn addNode(self: *Self, name: []const u8, options: rt.Node.Options) !*Node {
     return self.nodes.getPtr(name).?;
 }
 
-pub fn addEndpoint(self: *Self, name: []const u8) !rt.Endpoint {
-    const identity = try rt.Identity.random(&self.system.rng);
-    var builder = rt.endpoint.Builder.init(self.ally);
+pub fn addEndpoint(self: *Self, name: []const u8) !core.Endpoint {
+    const identity = try core.Identity.random(&self.system.rng);
+    var builder = core.endpoint.Builder.init(self.ally);
 
     _ = try builder
         .setIdentity(identity)
@@ -181,7 +181,7 @@ pub fn processBuffers(self: *Self) !void {
 
             for (source_interface.event_buffer.items) |event_out| {
                 if (event_out == .packet) {
-                    try target_interface.api.deliverEvent(rt.Node.Event.In{
+                    try target_interface.api.deliverEvent(core.Node.Event.In{
                         .packet = event_out.packet,
                     });
                 }

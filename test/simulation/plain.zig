@@ -1,5 +1,5 @@
+const core = @import("core");
 const std = @import("std");
-const rt = @import("reticulum");
 const t = std.testing;
 const topology = @import("kit/topology.zig");
 
@@ -15,7 +15,7 @@ test "abc" {
 
     var manual_clock = ManualClock.init();
     var seeded_rng = SeededRng.init(seed);
-    var system = rt.System{
+    var system = core.System{
         .clock = manual_clock.clock(),
         .rng = seeded_rng.rng(),
     };
@@ -28,12 +28,12 @@ test "abc" {
     const b1 = s.getInterface("b1").?;
     const c0 = s.getInterface("c0").?;
 
-    const name = try rt.endpoint.Name.init(
+    const name = try core.endpoint.Name.init(
         "plain",
         &.{ "test", "endpoint" },
         ally,
     );
-    const payload = rt.packet.Payload.makeRaw(try rt.data.makeBytes(
+    const payload = core.packet.Payload.makeRaw(try core.data.makeBytes(
         "this is some payload data",
         ally,
     ));

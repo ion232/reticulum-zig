@@ -6,20 +6,20 @@ pub fn build(b: *std.Build) void {
 
     // Core module.
     const core = .{
-        .name = "reticulum",
-        .module = b.addModule("reticulum-core", .{
-            .root_source_file = b.path("core/reticulum.zig"),
+        .name = "core",
+        .module = b.addModule("core", .{
+            .root_source_file = b.path("core/lib.zig"),
             .target = target,
             .optimize = optimize,
         }),
     };
 
     // All tests.
-    const test_step = b.step("test", "Run all tests.");
+    const test_step = b.step("test", "Run all tests");
 
     // Unit tests.
     {
-        const unit_tests_step = b.step("unit-tests", "Run unit tests.");
+        const unit_tests_step = b.step("unit-tests", "Run unit tests");
         test_step.dependOn(unit_tests_step);
 
         const t_app = b.addTest(.{
@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
 
         const t_core = b.addTest(.{
             .name = "core",
-            .root_source_file = b.path("core/reticulum.zig"),
+            .root_source_file = b.path("core/lib.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) void {
 
     // Deterministic simulation tests.
     {
-        const simulation_tests_step = b.step("simulation-tests", "Run simulation tests.");
+        const simulation_tests_step = b.step("simulation-tests", "Run simulation tests");
         test_step.dependOn(simulation_tests_step);
 
         const ohsnap = blk: {

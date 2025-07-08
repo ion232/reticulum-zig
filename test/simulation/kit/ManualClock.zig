@@ -1,5 +1,5 @@
+const core = @import("core");
 const std = @import("std");
-const rt = @import("reticulum");
 
 pub const Unit = enum {
     seconds,
@@ -31,7 +31,7 @@ pub fn monotonicMicros(ptr: *anyopaque) u64 {
     return self.timestamp;
 }
 
-pub fn clock(self: *Self) rt.System.Clock {
+pub fn clock(self: *Self) core.System.Clock {
     return .{
         .ptr = self,
         .monotonicMicrosFn = monotonicMicros,
