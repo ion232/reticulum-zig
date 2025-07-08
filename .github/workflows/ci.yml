@@ -28,7 +28,10 @@ jobs:
       - name: Build
         run: zig build
 
-      - name: Test
-        run: |
-          zig build test -Doptimize=Debug
-          zig build test -Doptimize=ReleaseFast
+      - name: Test Debug
+        # Remove this when 0.15.0 releases.
+        if: matrix.os != 'ubuntu-latest'
+        run: zig build test -Doptimize=Debug
+      
+      - name: Test Release
+        run: zig build test -Doptimize=ReleaseFast
