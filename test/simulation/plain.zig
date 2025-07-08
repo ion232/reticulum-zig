@@ -39,15 +39,13 @@ test "abc" {
     ));
 
     try a0.api.plain(name, payload);
-    try s.step();
+    try s.stepAfter(10, .microseconds, &manual_clock);
 
     try t.expect(a0.event_buffer.items.len == 1);
 
     inline for (&.{ b0, b1, c0 }) |n| {
         try t.expect(n.event_buffer.items.len == 0);
     }
-
-    const plain_packet = a0.event_buffer.items[0];
 
     try golden.snap(
         @src(),
@@ -58,5 +56,11 @@ test "abc" {
         \\  .payload = .raw{7468697320697320736f6d65207061796c6f61642064617461},
         \\}
         ,
-    ).expectEqualFmt(plain_packet);
+    ).expectEqualFmt(a0.event_buffer.items[0]);
+
+    try s.stepAfter(10, .microseconds, &manual_clock);
+
+    inline for (&.{ a0, b0, b1, c0 }) |n| {
+        try t.expect(n.event_buffer.items.len == 0);
+    }
 }
