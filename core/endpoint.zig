@@ -8,7 +8,7 @@ pub const Direction = enum {
     out,
 };
 
-pub const Method = enum(u2) {
+pub const Variant = enum(u2) {
     single,
     group,
     plain,

@@ -110,7 +110,7 @@ pub const Out = union(enum) {
                     @tagName(h.format),
                     @tagName(h.context),
                     @tagName(h.propagation),
-                    @tagName(h.method),
+                    @tagName(h.endpoint),
                     @tagName(h.purpose),
                     h.hops,
                 });
@@ -146,6 +146,9 @@ pub const Out = union(enum) {
                         var timestamp_bytes: [5]u8 = undefined;
                         std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
                         try f.entry("timestamp", "{x}", .{hex(&timestamp_bytes)});
+                        if (a.ratchet) |*ratchet| {
+                            try f.entry("ratchet", "{x}", .{hex(ratchet)});
+                        }
                         try f.entry("signature", "{x}", .{hex(&a.signature.toBytes())});
 
                         if (a.application_data.items.len > 0) {

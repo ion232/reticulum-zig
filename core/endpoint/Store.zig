@@ -88,7 +88,7 @@ test "main" {
             .setIdentity(try Identity.random(&rng))
             .setName(try Name.init("endpoint", &.{"main"}, ally))
             .setDirection(.in)
-            .setMethod(.single)
+            .setVariant(.single)
             .build();
 
         break :blk endpoint;

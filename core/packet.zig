@@ -1,10 +1,10 @@
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const data = @import("data.zig");
+const endpoint = @import("endpoint.zig");
 
 const Allocator = std.mem.Allocator;
-const Endpoint = @import("endpoint.zig").Managed;
-const EndpointMethod = @import("endpoint.zig").Method;
+const Endpoint = endpoint.Managed;
 const Hash = crypto.Hash;
 const Identity = crypto.Identity;
 
@@ -35,7 +35,7 @@ pub const Payload = union(enum) {
         name_hash: Hash.Name,
         noise: Noise,
         timestamp: Timestamp,
-        // rachet: ?*const [N]u8,
+        ratchet: ?crypto.Identity.Ratchet,
         signature: crypto.Ed25519.Signature,
         application_data: data.Bytes,
     };
@@ -58,6 +58,7 @@ pub const Payload = union(enum) {
                     .name_hash = a.name_hash,
                     .noise = a.noise,
                     .timestamp = a.timestamp,
+                    .ratchet = a.ratchet,
                     .signature = a.signature,
                     .application_data = try a.application_data.clone(),
                 },
@@ -78,6 +79,7 @@ pub const Payload = union(enum) {
                 total += crypto.Hash.name_length;
                 total += @sizeOf(Announce.Noise);
                 total += @sizeOf(Announce.Timestamp);
+                total += if (a.ratchet != null) @sizeOf(crypto.Identity.Ratchet) else 0;
                 total += crypto.Ed25519.Signature.encoded_length;
                 total += a.application_data.items.len;
                 break :blk total;
@@ -148,7 +150,7 @@ pub const Header = packed struct(u16) {
             transport,
         };
 
-        pub const Method = EndpointMethod;
+        pub const Endpoint = endpoint.Variant;
 
         pub const Purpose = enum(u2) {
             data,
@@ -158,12 +160,12 @@ pub const Header = packed struct(u16) {
         };
     };
 
-    interface: Flag.Interface = .open,
-    format: Flag.Format = .normal,
-    context: Flag.Context = .none,
-    propagation: Flag.Propagation = .broadcast,
-    method: Flag.Method = .single,
     purpose: Flag.Purpose = .data,
+    endpoint: Flag.Endpoint = .single,
+    propagation: Flag.Propagation = .broadcast,
+    context: Flag.Context = .none,
+    format: Flag.Format = .normal,
+    interface: Flag.Interface = .open,
     hops: u8 = 0,
 };
 
@@ -190,3 +192,85 @@ pub const Context = enum(u8) {
     link_request_rtt,
     link_request_proof,
 };
+
+test "validate-raw-announce-roundtrip" {
+    const t = std.testing;
+    const ally = t.allocator;
+    const rng = std.crypto.random;
+
+    // Captured from reference implementation - with framing removed.
+    const raw_announce = "71008133c7ce6d6be9b4070a3b98ee9ecab583dfe79d30200ee5e9f5c5615d45a5b000fb266456840e5f4d010a6fbb4025969f8db5415597e3d7a48431d0534e441d0bdeb78f1064f50b447291dd51617040dc9c40cb5b9adab1314ad270b1297d6fd46ec60bc318e2c0f0d908fc1c2bcdef00686f9b4ef17ec1b73f60b14df6709cb74164bd1890e26ff8a4634bbd855051ef959f413d7f7c8f9ff0f54ee81fb994c4e1975fe6f4b56fb26d2e107bd824d864a6932a2e2c02b1352ad9a31ce1cbeae72902effef1ccdeb7d004fbe527cd39111dc59d0e92c406696f6e323332c0";
+
+    var bytes = std.ArrayList(u8).init(ally);
+    defer bytes.deinit();
+
+    var i: usize = 0;
+    while (i < raw_announce.len) : (i += 2) {
+        const byte = std.fmt.parseInt(u8, raw_announce[i .. i + 2], 16) catch break;
+        try bytes.append(byte);
+    }
+
+    var factory = Factory.init(ally, rng, .{});
+    var p = factory.fromBytes(bytes.items) catch |err| {
+        std.debug.print("Failed to parse packet: {}\n", .{err});
+        return;
+    };
+    defer p.deinit();
+
+    try t.expect(p.header.purpose == .announce);
+    try t.expect(p.header.context == .some);
+    try t.expect(p.payload.announce.ratchet != null);
+
+    try p.validate();
+
+    var buffer: [1024]u8 = undefined;
+
+    var q = factory.fromBytes(try p.write(&buffer)) catch |err| {
+        std.debug.print("Failed to parse packet: {}\n", .{err});
+        return;
+    };
+    defer q.deinit();
+
+    try t.expect(q.header.purpose == .announce);
+    try t.expect(q.header.context == .some);
+    try t.expect(q.payload.announce.ratchet != null);
+
+    try q.validate();
+}
+
+test "validate-make-announce" {
+    const t = std.testing;
+    const ally = t.allocator;
+    var rng = std.crypto.random;
+
+    var builder = endpoint.Builder.init(ally);
+    defer builder.deinit();
+
+    var announce_endpoint = try builder
+        .setIdentity(try crypto.Identity.random(&rng))
+        .setDirection(.in)
+        .setVariant(.single)
+        .setName(try endpoint.Name.init("endpoint", &.{"test"}, ally))
+        .build();
+    defer announce_endpoint.deinit();
+
+    const app_data = "some application data";
+    const now = 123456789;
+    var factory = Factory.init(ally, rng, .{});
+    var announce_packet = try factory.makeAnnounce(&announce_endpoint, app_data, now);
+    defer announce_packet.deinit();
+
+    var raw_bytes = try data.Bytes.initCapacity(ally, announce_packet.size());
+    raw_bytes.expandToCapacity();
+    defer raw_bytes.deinit();
+    const raw_packet = try announce_packet.write(raw_bytes.items);
+
+    var p = try factory.fromBytes(raw_packet);
+    defer p.deinit();
+
+    try t.expect(p.header.purpose == .announce);
+    try p.validate();
+
+    const announce = p.payload.announce;
+    try t.expectEqualStrings(app_data, announce.application_data.items);
+}
