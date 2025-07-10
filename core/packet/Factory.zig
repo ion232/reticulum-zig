@@ -45,10 +45,9 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
     index += header_size;
 
     const both_auth = self.config.access_code != null and header.interface == .authenticated;
-    const both_not_auth = self.config.access_code == null and header.interface == .open;
-    const non_matching_auth = !(both_auth or both_not_auth);
+    const both_open = self.config.access_code == null and header.interface == .open;
 
-    if (non_matching_auth) {
+    if (!(both_auth or both_open)) {
         return Error.InvalidAuthentication;
     }
 
@@ -81,20 +80,22 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
             @memcpy(&endpoint, bytes[index .. index + endpoint.len]);
             index += endpoint.len;
 
-            const endpoints = packet.Endpoints{ .normal = .{
-                .endpoint = endpoint,
-            } };
+            const endpoints = packet.Endpoints{
+                .normal = .{
+                    .endpoint = endpoint,
+                },
+            };
 
             break :blk endpoints;
         },
         .transport => blk: {
-            var endpoint: crypto.Hash.Short = undefined;
-            @memcpy(&endpoint, bytes[index .. index + endpoint.len]);
-            index += endpoint.len;
-
             var transport_id: crypto.Hash.Short = undefined;
             @memcpy(&transport_id, bytes[index .. index + transport_id.len]);
             index += transport_id.len;
+
+            var endpoint: crypto.Hash.Short = undefined;
+            @memcpy(&endpoint, bytes[index .. index + endpoint.len]);
+            index += endpoint.len;
 
             const endpoints = packet.Endpoints{ .transport = .{
                 .transport_id = transport_id,
@@ -135,10 +136,20 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
                 index += signature_key_bytes.len;
                 @memcpy(&announce.name_hash, bytes[index .. index + announce.name_hash.len]);
                 index += announce.name_hash.len;
-                @memcpy(&announce.noise, bytes[index .. index + announce.noise.len]);
-                index += announce.noise.len;
-                announce.timestamp = std.mem.bytesToValue(u40, bytes[index .. index + @sizeOf(Announce.Timestamp)]);
-                index += @sizeOf(Announce.Timestamp);
+                @memcpy(&announce.noise, bytes[index .. index + 5]);
+                index += 5;
+                announce.timestamp = std.mem.readInt(u40, bytes[index .. index + 5][0..5], .big);
+                index += 5;
+
+                if (header.context == .some) {
+                    var ratchet: [32]u8 = undefined;
+                    @memcpy(&ratchet, bytes[index .. index + 32]);
+                    announce.ratchet = ratchet;
+                    index += 32;
+                } else {
+                    announce.ratchet = null;
+                }
+
                 var signature_bytes: [Signature.encoded_length]u8 = undefined;
                 @memcpy(&signature_bytes, bytes[index .. index + Signature.encoded_length]);
                 announce.signature = Signature.fromBytes(signature_bytes);
@@ -153,9 +164,7 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
         },
         else => .{ .raw = blk: {
             var raw = data.Bytes.init(self.ally);
-            errdefer {
-                raw.deinit();
-            }
+            errdefer raw.deinit();
             try raw.appendSlice(bytes[index..]);
             break :blk raw;
         } },
@@ -171,7 +180,6 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
     };
 }
 
-// TODO: Add ratchet.
 pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[]const u8, now: u64) Error!Packet {
     const identity = endpoint.identity orelse return Error.MissingIdentity;
     var announce: packet.Payload.Announce = undefined;
@@ -180,6 +188,9 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
     announce.name_hash = endpoint.name.hash.name().*;
     self.rng.bytes(&announce.noise);
     announce.timestamp = @truncate(now);
+    var ratchet: crypto.Identity.Ratchet = undefined;
+    self.rng.bytes(&ratchet);
+    announce.ratchet = ratchet;
     announce.application_data = data.Bytes.init(self.ally);
 
     if (application_data) |app_data| {
@@ -196,7 +207,14 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
         try bytes.appendSlice(announce.public.signature.bytes[0..]);
         try bytes.appendSlice(announce.name_hash[0..]);
         try bytes.appendSlice(announce.noise[0..]);
-        try bytes.appendSlice(&std.mem.toBytes(announce.timestamp));
+        var timestamp_bytes: [5]u8 = undefined;
+        std.mem.writeInt(u40, &timestamp_bytes, announce.timestamp, .big);
+        try bytes.appendSlice(&timestamp_bytes);
+
+        if (announce.ratchet) |*r| {
+            try bytes.appendSlice(r[0..]);
+        }
+
         try bytes.appendSlice(announce.application_data.items);
 
         break :blk try identity.sign(bytes);
@@ -222,51 +240,10 @@ pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet 
     }
 
     const plain = try builder
-        .setMethod(.plain)
+        .setVariant(.plain)
         .setEndpoint(name.hash.short().*)
         .setPayload(payload)
         .build();
 
     return plain;
-}
-
-test "make-announce-and-validate" {
-    const t = std.testing;
-    const EndpointBuilder = @import("../endpoint.zig").Builder;
-
-    const ally = t.allocator;
-    var rng = std.crypto.random;
-    const config = Interface.Config{};
-
-    var builder = EndpointBuilder.init(ally);
-    defer builder.deinit();
-
-    var endpoint = try builder
-        .setIdentity(try crypto.Identity.random(&rng))
-        .setDirection(.in)
-        .setMethod(.single)
-        .setName(try Name.init("endpoint", &.{"test"}, ally))
-        .build();
-    defer endpoint.deinit();
-
-    const app_data = "some application data";
-    const now = 123456789;
-    var factory1 = Self.init(ally, rng, config);
-    var announce_packet = try factory1.makeAnnounce(&endpoint, app_data, now);
-    defer announce_packet.deinit();
-
-    var packet_bytes = try data.Bytes.initCapacity(ally, announce_packet.size());
-    packet_bytes.expandToCapacity();
-    defer packet_bytes.deinit();
-    const raw_packet = try announce_packet.write(packet_bytes.items);
-
-    var factory2 = Self.init(ally, rng, config);
-    var parsed_packet = try factory2.fromBytes(raw_packet);
-    defer parsed_packet.deinit();
-
-    try t.expect(parsed_packet.header.purpose == .announce);
-    try parsed_packet.validate();
-
-    const announce = parsed_packet.payload.announce;
-    try t.expectEqualStrings(app_data, announce.application_data.items);
 }

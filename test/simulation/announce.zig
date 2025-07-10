@@ -44,7 +44,7 @@ test "abc" {
     try golden.snap(
         @src(),
         \\.packet = .{
-        \\  .header = .{.open, .normal, .none, .broadcast, .single, .announce, hops(0)},
+        \\  .header = .{.open, .normal, .some, .broadcast, .single, .announce, hops(0)},
         \\  .endpoints = .normal{71cb75e4effb51744aa9877da2b9af56},
         \\  .context = .none,
         \\  .payload = .announce{
@@ -53,7 +53,8 @@ test "abc" {
         \\    .name_hash = ca978112ca1bbdcafac2,
         \\    .noise = 9325ba36e2,
         \\    .timestamp = 000000000a,
-        \\    .signature = c5fb72c740fd8cc1a1dd844c38039b361f5253060e6a4789d06f925fae58c5907ad29f590c73297ef7f929e4d3a79f1d9a22f6baded58784c3ad743d63c4b205,
+        \\    .ratchet = 3cd8d216726b89248c7e1ae8d32e176dbb4c25dfbfa4edf2373f70c6c642ff85,
+        \\    .signature = ca87af796f5ab949ea7e44e0e618a973f558fe81a676d536d022c47e300dba8164dae7a4e51d66b2b5d22ad5ef92b77558cc889710758bac97d1846ce34b6c0b,
         \\    .application_data = 6865726520697320736f6d65206170702064617461,
         \\  },
         \\}
@@ -74,7 +75,7 @@ test "abc" {
     try golden.snap(
         @src(),
         \\.packet = .{
-        \\  .header = .{.open, .transport, .none, .broadcast, .single, .announce, hops(1)},
+        \\  .header = .{.open, .transport, .some, .broadcast, .single, .announce, hops(1)},
         \\  .endpoints = .transport{71cb75e4effb51744aa9877da2b9af56, f81ae61e99c1e826604cf1e5880c6847},
         \\  .context = .none,
         \\  .payload = .announce{
@@ -83,7 +84,8 @@ test "abc" {
         \\    .name_hash = ca978112ca1bbdcafac2,
         \\    .noise = 9325ba36e2,
         \\    .timestamp = 000000000a,
-        \\    .signature = c5fb72c740fd8cc1a1dd844c38039b361f5253060e6a4789d06f925fae58c5907ad29f590c73297ef7f929e4d3a79f1d9a22f6baded58784c3ad743d63c4b205,
+        \\    .ratchet = 3cd8d216726b89248c7e1ae8d32e176dbb4c25dfbfa4edf2373f70c6c642ff85,
+        \\    .signature = ca87af796f5ab949ea7e44e0e618a973f558fe81a676d536d022c47e300dba8164dae7a4e51d66b2b5d22ad5ef92b77558cc889710758bac97d1846ce34b6c0b,
         \\    .application_data = 6865726520697320736f6d65206170702064617461,
         \\  },
         \\}

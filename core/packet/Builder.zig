@@ -72,8 +72,8 @@ pub fn setTransport(self: *Self, endpoint_hash: Hash.Short, transport_id: Hash.S
     return self;
 }
 
-pub fn setMethod(self: *Self, method: Header.Flag.Method) *Self {
-    self.header.method = method;
+pub fn setVariant(self: *Self, variant: Header.Flag.Endpoint) *Self {
+    self.header.endpoint = variant;
     return self;
 }
 
@@ -89,16 +89,14 @@ pub fn setContext(self: *Self, context: Context) *Self {
 }
 
 pub fn setPayload(self: *Self, payload: Payload) *Self {
-    self.header.purpose = switch (payload) {
-        .announce => .announce,
-        else => self.header.purpose,
-    };
+    switch (payload) {
+        .announce => |*a| {
+            self.header.purpose = .announce;
+            self.header.context = if (a.ratchet != null) .some else .none;
+        },
+        else => {},
+    }
     self.payload = payload;
-    return self;
-}
-
-pub fn appendPayload(self: *Self, payload: []const u8) !*Self {
-    try self.payload.appendSlice(payload);
     return self;
 }
 

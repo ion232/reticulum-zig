@@ -41,7 +41,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
     var main_endpoint = try endpoint_builder
         .setIdentity(identity orelse try Identity.random(&system.rng))
         .setDirection(.in)
-        .setMethod(.single)
+        .setVariant(.single)
         .setName(try Name.init(options.name, &.{}, ally))
         .build();
     defer main_endpoint.deinit();
@@ -180,7 +180,7 @@ fn packetOut(self: *Self, interface: *Interface, packet: *Packet) !bool {
     _ = self;
 
     const purpose = packet.header.purpose;
-    const method = packet.header.method;
+    const variant = packet.header.endpoint;
     const hops = packet.header.hops;
 
     if (purpose == .announce) {
@@ -188,7 +188,7 @@ fn packetOut(self: *Self, interface: *Interface, packet: *Packet) !bool {
         return false;
     }
 
-    if (method == .plain and hops == 0) {
+    if (variant == .plain and hops == 0) {
         try interface.outgoing.push(.{ .packet = packet.* });
         return false;
     }

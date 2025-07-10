@@ -136,7 +136,7 @@ pub fn addEndpoint(self: *Self, name: []const u8) !core.Endpoint {
     _ = try builder
         .setIdentity(identity)
         .setDirection(.in)
-        .setMethod(.single)
+        .setVariant(.single)
         .setApplicationName(name);
 
     var endpoint = try builder.build();

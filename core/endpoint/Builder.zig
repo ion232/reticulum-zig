@@ -6,7 +6,7 @@ const endpoint = @import("../endpoint.zig");
 const Allocator = std.mem.Allocator;
 const Identity = crypto.Identity;
 const Direction = endpoint.Direction;
-const Method = endpoint.Method;
+const Variant = endpoint.Variant;
 const Name = endpoint.Name;
 const Hash = crypto.Hash;
 const Managed = @import("Managed.zig");
@@ -17,14 +17,14 @@ pub const Error = error{
     HasIdentity,
     MissingIdentity,
     MissingDirection,
-    MissingMethod,
+    MissingVariant,
     MissingName,
 } || Allocator.Error;
 
 ally: Allocator,
 identity: ?Identity,
 direction: ?Direction,
-method: ?Method,
+variant: ?Variant,
 name: ?Name,
 
 pub fn init(ally: Allocator) Self {
@@ -32,7 +32,7 @@ pub fn init(ally: Allocator) Self {
         .ally = ally,
         .identity = null,
         .direction = null,
-        .method = null,
+        .variant = null,
         .name = null,
     };
 }
@@ -47,8 +47,8 @@ pub fn setDirection(self: *Self, direction: Direction) *Self {
     return self;
 }
 
-pub fn setMethod(self: *Self, method: Method) *Self {
-    self.method = method;
+pub fn setVariant(self: *Self, variant: Variant) *Self {
+    self.variant = variant;
     return self;
 }
 
@@ -59,12 +59,12 @@ pub fn setName(self: *Self, name: Name) *Self {
 
 pub fn build(self: *Self) Error!Managed {
     const direction = self.direction orelse return Error.MissingDirection;
-    const method = self.method orelse return Error.MissingMethod;
+    const variant = self.variant orelse return Error.MissingVariant;
     const name = self.name orelse return Error.MissingName;
 
-    if (method == .plain and self.identity != null) {
+    if (variant == .plain and self.identity != null) {
         return Error.HasIdentity;
-    } else if (method != .plain and self.identity == null) {
+    } else if (variant != .plain and self.identity == null) {
         return Error.MissingIdentity;
     }
 
@@ -87,7 +87,7 @@ pub fn build(self: *Self) Error!Managed {
         .ally = self.ally,
         .identity = self.identity,
         .direction = direction,
-        .method = method,
+        .variant = variant,
         .name = name,
         .hash = hash,
     };

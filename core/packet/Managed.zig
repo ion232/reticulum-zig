@@ -43,15 +43,28 @@ pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
 pub fn validate(self: *const Self) !void {
     switch (self.payload) {
         .announce => |a| {
+            var signed_data = std.ArrayList(u8).init(self.ally);
+            defer signed_data.deinit();
+
             const endpoint_hash = self.endpoints.endpoint();
+            try signed_data.appendSlice(endpoint_hash[0..]);
+            try signed_data.appendSlice(a.public.dh[0..]);
+            try signed_data.appendSlice(a.public.signature.bytes[0..]);
+            try signed_data.appendSlice(a.name_hash[0..]);
+            try signed_data.appendSlice(a.noise[0..]);
+
+            var timestamp_bytes: [5]u8 = undefined;
+            std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
+            try signed_data.appendSlice(&timestamp_bytes);
+
+            if (a.ratchet) |*ratchet| {
+                try signed_data.appendSlice(ratchet[0..]);
+            }
+
+            try signed_data.appendSlice(a.application_data.items);
+
             var verifier = try a.signature.verifier(a.public.signature);
-            verifier.update(&endpoint_hash);
-            verifier.update(&a.public.dh);
-            verifier.update(&a.public.signature.bytes);
-            verifier.update(&a.name_hash);
-            verifier.update(&a.noise);
-            verifier.update(&std.mem.toBytes(a.timestamp));
-            verifier.update(a.application_data.items);
+            verifier.update(signed_data.items);
             try verifier.verify();
 
             const identity = crypto.Identity.fromPublic(a.public);
@@ -114,9 +127,16 @@ pub fn write(self: *const Self, buffer: []u8) ![]u8 {
             i += a.name_hash.len;
             @memcpy(buffer[i .. i + a.noise.len], &a.noise);
             i += a.noise.len;
-            const timestamp_bytes = std.mem.asBytes(&a.timestamp);
-            @memcpy(buffer[i .. i + timestamp_bytes.len], timestamp_bytes);
+            var timestamp_bytes: [5]u8 = undefined;
+            std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
+            @memcpy(buffer[i .. i + timestamp_bytes.len], &timestamp_bytes);
             i += timestamp_bytes.len;
+
+            if (a.ratchet) |*ratchet| {
+                @memcpy(buffer[i .. i + ratchet.len], ratchet);
+                i += ratchet.len;
+            }
+
             @memcpy(buffer[i .. i + crypto.Ed25519.Signature.encoded_length], &a.signature.toBytes());
             i += crypto.Ed25519.Signature.encoded_length;
             @memcpy(buffer[i .. i + a.application_data.items.len], a.application_data.items);
@@ -134,17 +154,17 @@ pub fn write(self: *const Self, buffer: []u8) ![]u8 {
 
 pub fn hash(self: *const Self) Hash {
     const header = std.mem.asBytes(&self.header);
-    const method_and_purpose: u8 = std.mem.bytesAsSlice(u4, header)[1];
+    const variant_and_purpose: u8 = std.mem.bytesAsSlice(u4, header)[1];
     const context = @intFromEnum(self.context);
 
     var hasher = switch (self.endpoints) {
         .normal => |normal| Hash.incremental(.{
-            .method_and_purpose = method_and_purpose,
+            .variant_and_purpose = variant_and_purpose,
             .endpoint = normal.endpoint,
             .context = context,
         }),
         .transport => |transport| Hash.incremental(.{
-            .method_and_purpose = method_and_purpose,
+            .variant_and_purpose = variant_and_purpose,
             .transport_id = transport.transport_id,
             .endpoint = transport.endpoint,
             .context = context,
@@ -158,7 +178,12 @@ pub fn hash(self: *const Self) Hash {
             hasher.update(&announce.public.signature.bytes);
             hasher.update(&announce.name_hash);
             hasher.update(&announce.noise);
-            hasher.update(std.mem.asBytes(&announce.timestamp));
+            var timestamp_bytes: [5]u8 = undefined;
+            std.mem.writeInt(u40, &timestamp_bytes, announce.timestamp, .big);
+            hasher.update(&timestamp_bytes);
+            if (announce.ratchet) |*ratchet| {
+                hasher.update(ratchet);
+            }
             hasher.update(&announce.signature.r);
             hasher.update(&announce.signature.s);
             hasher.update(announce.application_data.items);

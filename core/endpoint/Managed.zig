@@ -6,7 +6,7 @@ const endpoint = @import("../endpoint.zig");
 const Allocator = std.mem.Allocator;
 const Identity = crypto.Identity;
 const Direction = endpoint.Direction;
-const Method = endpoint.Method;
+const Variant = endpoint.Variant;
 const Name = endpoint.Name;
 const Hash = crypto.Hash;
 
@@ -15,7 +15,7 @@ const Self = @This();
 ally: Allocator,
 identity: ?Identity,
 direction: Direction,
-method: Method,
+variant: Variant,
 name: Name,
 hash: Hash,
 
@@ -24,7 +24,7 @@ pub fn clone(self: *const Self) !Self {
         .ally = self.ally,
         .identity = self.identity,
         .direction = self.direction,
-        .method = self.method,
+        .variant = self.variant,
         .name = try self.name.clone(),
         .hash = self.hash,
     };
