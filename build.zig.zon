@@ -8,10 +8,11 @@
         "build.zig.zon",
         "LICENSE",
         "README.md",
-        "core/",
+        "app",
+        "core",
+        "io",
     },
     .dependencies = .{
-        // TODO: Move this out into just the tests if possible. Currently zig doesn't have dev dependencies.
         .ohsnap = .{
             .url = "git+https://github.com/mnemnion/ohsnap#a140626e388ad3aea2a6a678183f5c0c03887fde",
             .hash = "ohsnap-0.3.1-iWxzyu6bAADX1OdmK7FFg94X6RDfDvbt0iwQFH8mSFJE",
