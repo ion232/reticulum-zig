@@ -2,10 +2,13 @@ const std = @import("std");
 const data = @import("../data.zig");
 const errors = std.crypto.errors;
 
-const X25519 = @import("X25519.zig");
+const X25519 = std.crypto.dh.X25519;
 const Ed25519 = std.crypto.sign.Ed25519;
 const Hash = @import("Hash.zig");
 const Rng = @import("../System.zig").Rng;
+
+const X25519PublicKey = [X25519.public_length]u8;
+const X25519SecretKey = [X25519.secret_length]u8;
 
 const Self = @This();
 
@@ -13,15 +16,15 @@ pub const Error = error{
     MissingSecretKey,
 } || errors.EncodingError || errors.IdentityElementError || errors.NonCanonicalError || errors.SignatureVerificationError || errors.KeyMismatchError || errors.WeakPublicKeyError;
 
-pub const Ratchet = X25519.SecretKey;
+pub const Ratchet = X25519PublicKey;
 pub const PublicKeys = Public;
 pub const Public = struct {
-    dh: X25519.PublicKey,
+    dh: X25519PublicKey,
     signature: Ed25519.PublicKey,
 };
 
 const Secret = struct {
-    dh: X25519.SecretKey,
+    dh: X25519SecretKey,
     signature: Ed25519.SecretKey,
 };
 
@@ -44,7 +47,7 @@ pub fn random(rng: *Rng) !Self {
     rng.bytes(&dh_seed);
     rng.bytes(&signature_seed);
 
-    const dh = try X25519.makeKeyPair(dh_seed);
+    const dh = try X25519.KeyPair.generateDeterministic(dh_seed);
     const signature = try Ed25519.KeyPair.generateDeterministic(signature_seed);
 
     const public = Public{
