@@ -5,6 +5,7 @@ const Optimize = std.builtin.OptimizeMode;
 
 pub fn build(b: *std.Build) void {
     var builder = Builder.init(b);
+    builder.c();
     builder.examples();
     builder.tests();
 }
@@ -16,6 +17,7 @@ const Builder = struct {
     const TestSuite = enum { integration, simulation };
 
     b: *std.Build,
+    options: *std.Build.Step.Options,
     target: Target,
     optimize: Optimize,
 
@@ -37,9 +39,30 @@ const Builder = struct {
 
         return .{
             .b = b,
+            .options = b.addOptions(),
             .target = target,
             .optimize = optimize,
         };
+    }
+
+    pub fn c(self: *Self) void {
+        const step = self.b.step("c", "Build core as a c library");
+        const static_lib = self.b.addLibrary(.{
+            .name = self.b.fmt("rtcore", .{}),
+            .root_module = self.module(.core),
+            .linkage = .static,
+        });
+
+        const exports = @import("core/exports.zig");
+        const write_files = self.b.addWriteFiles();
+        const header_path = write_files.add("rt_core.h", exports.generateHeader());
+
+        const install_header_file = self.b.addInstallHeaderFile(header_path, "rt_core.h");
+        const install_static_lib = self.b.addInstallArtifact(static_lib, .{});
+
+        install_header_file.step.dependOn(&write_files.step);
+        step.dependOn(&install_static_lib.step);
+        step.dependOn(&install_header_file.step);
     }
 
     pub fn examples(self: *Self) void {
@@ -89,6 +112,7 @@ const Builder = struct {
                 .target = self.target,
                 .optimize = self.optimize,
             });
+
             step.dependOn(&self.b.addRunArtifact(compile).step);
         }
 
@@ -142,6 +166,10 @@ const Builder = struct {
     }
 
     fn addImport(self: *Self, compile: *std.Build.Step.Compile, comptime package: Package) void {
-        compile.root_module.addImport(@tagName(package), self.b.modules.getPtr(@tagName(package)).?.*);
+        compile.root_module.addImport(@tagName(package), self.module(package));
+    }
+
+    fn module(self: *Self, comptime package: Package) *std.Build.Module {
+        return self.b.modules.getPtr(@tagName(package)).?.*;
     }
 };

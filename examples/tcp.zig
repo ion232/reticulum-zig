@@ -7,11 +7,10 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     const ally = gpa.allocator();
-    var clock = try io.os.Clock.init();
-    var rng = io.os.Rng.init();
+    var clock = try io.system.Clock.init();
     var system = core.System{
         .clock = clock.clock(),
-        .rng = rng.rng(),
+        .rng = std.crypto.random,
     };
 
     var node = try core.Node.init(ally, &system, null, .{});
