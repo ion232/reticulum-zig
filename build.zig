@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     builder.c();
     builder.examples();
     builder.tests();
+    builder.wasm();
 }
 
 const Builder = struct {
@@ -99,6 +100,38 @@ const Builder = struct {
         test_step.dependOn(unit_tests);
         test_step.dependOn(integration_tests);
         test_step.dependOn(simulation_tests);
+    }
+
+    pub fn wasm(self: *Self) void {
+        const step = self.b.step("wasm", "Build core as a wasm module");
+
+        const wasi = self.b.option(bool, "wasi", "If the module should target wasi") orelse false;
+        const core = self.b.addModule("core_wasm", .{
+            .root_source_file = self.b.path("core/lib.zig"),
+            .target = self.b.resolveTargetQuery(.{
+                .cpu_arch = .wasm32,
+                .os_tag = if (wasi) .wasi else .freestanding,
+            }),
+            .optimize = self.optimize,
+        });
+
+        const wasm_module = self.b.addExecutable(.{
+            .name = self.b.fmt("rt_core", .{}),
+            .root_module = core,
+            .linkage = .static,
+        });
+
+        wasm_module.entry = .disabled;
+        wasm_module.rdynamic = true;
+
+        // TODO: Add options to configure these.
+        wasm_module.global_base = 4096;
+        wasm_module.stack_size = 16 * std.wasm.page_size;
+        wasm_module.initial_memory = 64 * std.wasm.page_size;
+        wasm_module.max_memory = 512 * std.wasm.page_size;
+
+        const install_wasm_module = self.b.addInstallArtifact(wasm_module, .{});
+        step.dependOn(&install_wasm_module.step);
     }
 
     fn unitTests(self: *Self) *std.Build.Step {

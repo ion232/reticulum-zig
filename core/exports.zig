@@ -5,8 +5,10 @@ const builtin = @import("builtin");
 const std = @import("std");
 const lib = @import("lib.zig");
 
+const is_wasm = (builtin.cpu.arch == .wasm32 or builtin.cpu.arch == .wasm64);
+
+const Gpa = if (is_wasm) void else std.heap.GeneralPurposeAllocator(.{});
 const Allocator = std.mem.Allocator;
-const Gpa = std.heap.GeneralPurposeAllocator(.{});
 
 const Self = @This();
 
@@ -20,9 +22,10 @@ var system: lib.System = undefined;
 
 pub const Error = enum(c_int) {
     none = 0,
-    missing_allocator = 1,
-    out_of_memory = 2,
-    leaked_memory = 3,
+    already_initialized = 1,
+    missing_allocator = 2,
+    out_of_memory = 3,
+    leaked_memory = 4,
     unknown = 255,
 };
 
@@ -30,10 +33,18 @@ pub fn libInit(
     monotonicMicros: lib.System.SimpleClock.Callback,
     rngFill: lib.System.SimpleRng.Callback,
 ) callconv(.c) Error {
-    if (allocator != null) return .missing_allocator;
+    if (allocator != null) return .already_initialized;
 
-    gpa = Gpa{};
-    allocator = gpa.?.allocator();
+    if (is_wasm) {
+        allocator = .{
+            .ptr = undefined,
+            .vtable = &std.heap.WasmAllocator.vtable,
+        };
+    } else {
+        gpa = Gpa{};
+        allocator = gpa.?.allocator();
+    }
+
     clock = lib.System.SimpleClock.init(monotonicMicros);
     rng = lib.System.SimpleRng.init(rngFill);
     system = lib.System{
@@ -41,16 +52,20 @@ pub fn libInit(
         .rng = rng.rng(),
     };
 
+    // std.debug.print("Hello from a wasm module!\n", .{});
+
     return .none;
 }
 
 pub fn libDeinit() callconv(.c) Error {
-    if (gpa == null or allocator == null) return .none;
+    allocator = null;
+
+    if (is_wasm) {
+        return .none;
+    }
 
     if (gpa) |*g| {
-        if (g.deinit() == .leak) {
-            return .leaked_memory;
-        }
+        if (g.deinit() == .leak) return .leaked_memory;
     }
 
     return .none;
