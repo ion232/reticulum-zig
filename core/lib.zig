@@ -15,6 +15,9 @@ comptime {
     const builtin = @import("builtin");
     const std = @import("std");
 
+    // We import the file so that the exports actually run for this module.
+    _ = @import("exports.zig");
+
     // Ensure unit tests are ran by referencing relevant files.
     if (builtin.is_test) {
         // Private files must be specifically enumerated.
