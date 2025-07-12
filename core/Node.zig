@@ -16,6 +16,7 @@ const Identity = @import("crypto.zig").Identity;
 const Packet = @import("packet.zig").Packet;
 const PacketFactory = @import("packet.zig").Factory;
 const PacketFilter = @import("packet.zig").Filter;
+const Ratchets = @import("Ratchets.zig");
 const Routes = @import("Routes.zig");
 const Name = @import("endpoint/Name.zig");
 const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
@@ -33,6 +34,7 @@ system: System,
 options: Options,
 endpoints: Endpoints,
 interfaces: Interfaces,
+ratchets: Ratchets,
 routes: Routes,
 packet_filter: PacketFilter,
 
@@ -47,8 +49,9 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
     defer main_endpoint.deinit();
     const endpoints = try Endpoints.init(ally, &main_endpoint);
     const interfaces = Interfaces.init(ally, system.*);
+    const ratchets = Ratchets.init(ally, &system.rng);
     const routes = Routes.init(ally);
-    const packet_filter_capacity = if (builtin.target.os.tag == .freestanding) 2048 else 1_000_000;
+    const packet_filter_capacity = if (builtin.target.os.tag == .freestanding and builtin.cpu.arch != .wasm32) 2048 else 32768;
     const packet_filter = try PacketFilter.init(ally, packet_filter_capacity);
 
     return .{
@@ -58,6 +61,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
         .options = options,
         .endpoints = endpoints,
         .interfaces = interfaces,
+        .ratchets = ratchets,
         .routes = routes,
         .packet_filter = packet_filter,
     };
