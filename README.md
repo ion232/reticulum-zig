@@ -4,4 +4,4 @@ An implementation of [Reticulum](https://github.com/markqvist/Reticulum) in [Zig
 
 # Licence
 
-- Currently under Apache 2.0 for now; if I move over to the Reticulum licence at some point, it will only be after significant thought and consideration.
+- Currently under Apache 2.0 and MIT for now; if I move over to the Reticulum licence at some point, it will only be after significant thought and consideration.
