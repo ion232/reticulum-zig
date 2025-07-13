@@ -23,13 +23,16 @@ const Builder = struct {
     optimize: Optimize,
 
     pub fn init(b: *std.Build) Self {
+        const options = b.addOptions();
         const target = b.standardTargetOptions(.{});
         const optimize = b.standardOptimizeOption(.{});
+
         const core = b.addModule(@tagName(.core), .{
             .root_source_file = b.path(@tagName(.core) ++ "/lib.zig"),
             .target = target,
             .optimize = optimize,
         });
+
         const io = b.addModule(@tagName(.io), .{
             .root_source_file = b.path(@tagName(.io) ++ "/lib.zig"),
             .target = target,
@@ -40,7 +43,7 @@ const Builder = struct {
 
         return .{
             .b = b,
-            .options = b.addOptions(),
+            .options = options,
             .target = target,
             .optimize = optimize,
         };
@@ -80,14 +83,22 @@ const Builder = struct {
         self.addImport(example, .core);
         self.addImport(example, .io);
 
-        const run = self.b.addRunArtifact(example);
-        run.step.dependOn(self.b.getInstallStep());
+        const ci = self.b.option(bool, "ci", "Running in CI") orelse false;
 
-        if (self.b.args) |args| {
-            run.addArgs(args);
+        if (ci) {
+            const install_example = self.b.addInstallArtifact(example, .{});
+            install_example.step.dependOn(self.b.getInstallStep());
+            step.dependOn(&install_example.step);
+        } else {
+            const run_example = self.b.addRunArtifact(example);
+            run_example.step.dependOn(self.b.getInstallStep());
+
+            if (self.b.args) |args| {
+                run_example.addArgs(args);
+            }
+
+            step.dependOn(&run_example.step);
         }
-
-        step.dependOn(&run.step);
     }
 
     pub fn tests(self: *Self) void {

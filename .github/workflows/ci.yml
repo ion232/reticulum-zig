@@ -11,8 +11,10 @@ on:
     - '**.c'
     - '**.h'
 
+# Remove guard against Linux Debug when #35 is closed.
+
 jobs:
-  build:
+  test:
     strategy:
       fail-fast: false
       matrix:
@@ -25,13 +27,69 @@ jobs:
 
       - uses: mlugg/setup-zig@v2
 
-      - name: Build
-        run: zig build
-
-      - name: Test Debug
-        # Remove this when 0.15.0 releases.
+      - name: Debug
         if: matrix.os != 'ubuntu-latest'
         run: zig build test -Doptimize=Debug
       
-      - name: Test Release
+      - name: Release
         run: zig build test -Doptimize=ReleaseFast
+
+  examples:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: false
+
+      - uses: mlugg/setup-zig@v2
+
+      - name: Debug
+        if: matrix.os != 'ubuntu-latest'
+        run: zig build example -Dname=tcp -Doptimize=Debug -Dci=true
+
+      - name: Release
+        run: zig build example -Dname=tcp -Doptimize=ReleaseFast -Dci=true
+
+  c:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: false
+
+      - uses: mlugg/setup-zig@v2
+
+      - name: Debug
+        if: matrix.os != 'ubuntu-latest'
+        run: zig build c -Doptimize=Debug
+
+      - name: Release
+        run: zig build c -Doptimize=ReleaseFast
+
+  wasm:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: false
+
+      - uses: mlugg/setup-zig@v2
+
+      - name: Debug
+        if: matrix.os != 'ubuntu-latest'
+        run: zig build wasm -Doptimize=Debug
+
+      - name: Release
+        run: zig build wasm -Doptimize=ReleaseFast
