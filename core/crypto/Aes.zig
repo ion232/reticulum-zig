@@ -1,8 +1,10 @@
 const std = @import("std");
 const Aes = std.crypto.core.aes.Aes256;
-const Pkcs7 = @import("pkcs7.zig").Impl;
+const Pkcs7 = @import("pkcs7.zig").Impl(block_length);
 
 const Self = @This();
+
+pub const Error = error{NotBlockMultiple} || Pkcs7.Error;
 
 pub const key_length = Aes.key_bits / 8;
 pub const block_length = Aes.block.block_length;
@@ -24,18 +26,20 @@ pub fn encrypt(dst: []u8, src: []const u8, key: [key_length]u8, iv: [block_lengt
     if (i < src.len) {
         @memcpy(dst[i..src.len], src[i..src.len]);
     }
-    const ciphertext = Pkcs7(block_length).pad(dst[0..src.len], dst);
+    const ciphertext = Pkcs7.pad(dst[0..src.len], dst);
     const xored_block = Aes.block.fromBytes(last_block).xorBytes(previous);
     context.encrypt(last_block, &xored_block);
     return ciphertext;
 }
 
-pub fn decrypt(dst: []u8, src: []const u8, key: [key_length]u8, iv: [block_length]u8) ![]const u8 {
+pub fn decrypt(dst: []u8, src: []const u8, key: [key_length]u8, iv: [block_length]u8) Error![]const u8 {
     const context = Aes.initDec(key);
     var previous: *const [block_length]u8 = &iv;
     var i: usize = 0;
 
-    std.debug.assert(src.len % block_length == 0);
+    if (src.len % block_length != 0) {
+        return Error.NotBlockMultiple;
+    }
 
     while (i + block_length <= src.len) : (i += block_length) {
         const current = src[i .. i + block_length][0..block_length];
@@ -46,7 +50,7 @@ pub fn decrypt(dst: []u8, src: []const u8, key: [key_length]u8, iv: [block_lengt
         previous = current;
     }
 
-    return try Pkcs7(block_length).unpad(dst[0..src.len]);
+    return try Pkcs7.unpad(dst[0..src.len]);
 }
 
 const t = std.testing;

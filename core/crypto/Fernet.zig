@@ -6,31 +6,29 @@ const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 
 const Self = @This();
 
-pub const Error = error{
-    VerificationFailed,
-};
+pub const Error = error{VerificationFailed} || Aes.Error;
 
-pub const SigningKey = [Aes.block_length]u8;
-pub const EncryptionKey = [Aes.block_length]u8;
+pub const SigningKey = [Aes.key_length]u8;
+pub const EncryptionKey = [Aes.key_length]u8;
 
 signing_key: SigningKey,
 encryption_key: EncryptionKey,
 
-pub fn init(signing_key: SigningKey, encryption_key: EncryptionKey) Self {
+pub fn init(signing_key: *const SigningKey, encryption_key: *const EncryptionKey) Self {
     return .{
-        .signing_key = signing_key,
-        .encryption_key = encryption_key,
+        .signing_key = signing_key.*,
+        .encryption_key = encryption_key.*,
     };
 }
 
 pub fn random(rng: Rng) Self {
-    const self = Self{
+    var self = Self{
         .signing_key = undefined,
         .encryption_key = undefined,
     };
 
-    rng.bytes(self.signing_key);
-    rng.bytes(self.encryption_key);
+    rng.bytes(&self.signing_key);
+    rng.bytes(&self.encryption_key);
 
     return self;
 }
@@ -81,21 +79,20 @@ pub const Token = struct {
 const t = std.testing;
 
 test "init" {
-    const signing_key = @as(u128, 0x0123456789ABCDEF0123456789ABCDEF);
-    const encryption_key = @as(u128, 0xFEDCBA9876543210FEDCBA9876543210);
-
+    const signing_key = "123456789ab321001234cf8765432a10";
+    const encryption_key = "fdecb432100ab12356789ab32100cdef";
     const fernet = Self.init(signing_key, encryption_key);
 
-    try t.expectEqual(signing_key, std.mem.bytesToValue(u128, &fernet.signing_key));
-    try t.expectEqual(encryption_key, std.mem.bytesToValue(u128, &fernet.encryption_key));
+    try t.expectEqualSlices(u8, signing_key, &fernet.signing_key);
+    try t.expectEqualSlices(u8, encryption_key, &fernet.encryption_key);
 }
 
-test "Fernet - encrypt and decrypt" {
-    const fernet = Self.random();
+test "encrypt-decrypt" {
+    const fernet = Self.random(std.crypto.random);
     const plaintext = "reticulum-zig!";
     var ciphertext: [2 * Aes.block_length]u8 = undefined;
 
-    const token = fernet.encrypt(plaintext, &ciphertext);
+    const token = fernet.encrypt(std.crypto.random, plaintext, &ciphertext);
     try t.expect(fernet.verify(&token));
     try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
 
@@ -104,13 +101,13 @@ test "Fernet - encrypt and decrypt" {
     try t.expectEqualSlices(u8, plaintext, computed_plaintext);
 }
 
-test "Fernet - encrypt and decrypt of block length" {
-    const fernet = Self.random();
-    const plaintext = "reticulum-zig :)";
+test "encrypt-decrypt-block-size" {
+    const fernet = Self.random(std.crypto.random);
+    const plaintext = "reticulum ⚡️";
     var ciphertext: [2 * Aes.block_length]u8 = undefined;
-    t.expect(plaintext.len == Aes.block_length);
+    try t.expect(plaintext.len == Aes.block_length);
 
-    const token = fernet.encrypt(plaintext, &ciphertext);
+    const token = fernet.encrypt(std.crypto.random, plaintext, &ciphertext);
     try t.expect(fernet.verify(&token));
     try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
 

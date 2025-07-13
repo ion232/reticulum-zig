@@ -22,7 +22,8 @@ comptime {
     if (builtin.is_test) {
         // Private files must be specifically enumerated.
         std.testing.refAllDecls(@import("crypto/Aes.zig"));
-        // Fernet currently needs fixing.
+        std.testing.refAllDecls(@import("crypto/Fernet.zig"));
+        std.testing.refAllDecls(@import("crypto/Identity.zig"));
         // Public files can be referenced all at once from here.
         std.testing.refAllDecls(@This());
     }
