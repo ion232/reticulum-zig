@@ -232,6 +232,22 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
         .build();
 }
 
+pub fn makeData(self: *Self, name: Name, payload: packet.Payload) Error!Packet {
+    var builder = Builder.init(self.ally);
+
+    if (self.config.access_code) |interface_access_code| {
+        _ = try builder.setInterfaceAccessCode(interface_access_code);
+    }
+
+    const plain = try builder
+        .setVariant(.plain)
+        .setEndpoint(name.hash.short().*)
+        .setPayload(payload)
+        .build();
+
+    return plain;
+}
+
 pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet {
     var builder = Builder.init(self.ally);
 

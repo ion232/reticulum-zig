@@ -1,4 +1,5 @@
-//! This file is not part of the core module and therefore can contain non-freestanding code.
+//! The purpose of this file is to customise the exports for c and wasm.
+//! This file is not part of the core module and can therefore contain non-freestanding code.
 //! Be aware that this file will be imported into the build executable in order to generate the header file.
 
 const builtin = @import("builtin");

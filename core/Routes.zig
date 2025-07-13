@@ -80,7 +80,7 @@ pub fn updateFrom(self: *Self, packet: *const Packet, interface: *const Interfac
         .next_hop = next_hop,
         .hops = packet.header.hops,
         .last_seen = now,
-        .expiry_time = now + interface.mode.route_lifetime(),
+        .expiry_time = now + interface.mode.routeLifetime(),
         .noises = Entry.Noises.init(self.ally),
         .latest_timestamp = timestamp,
         .packet_hash = packet.hash(),

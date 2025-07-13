@@ -8,8 +8,10 @@ const Self = @This();
 
 pub const Error = error{VerificationFailed} || Aes.Error;
 
-pub const SigningKey = [Aes.key_length]u8;
-pub const EncryptionKey = [Aes.key_length]u8;
+pub const SigningKey = [key_length]u8;
+pub const EncryptionKey = [key_length]u8;
+
+pub const key_length = Aes.key_length;
 
 signing_key: SigningKey,
 encryption_key: EncryptionKey,
@@ -33,11 +35,14 @@ pub fn random(rng: Rng) Self {
     return self;
 }
 
-pub fn encrypt(self: Self, rng: Rng, plaintext: []const u8, buffer: []u8) Token {
+pub fn encrypt(self: Self, rng: Rng, buffer: []u8, plaintext: []const u8) usize {
     var iv: [Aes.block_length]u8 = undefined;
     rng.bytes(&iv);
+    @memcpy(buffer[0..iv.len], &iv);
 
-    const ciphertext = Aes.encrypt(buffer, plaintext, self.encryption_key, iv);
+    const ciphertext = Aes.encrypt(buffer[iv.len..], plaintext, self.encryption_key, iv);
+    const hmac_index = iv.len + ciphertext.len;
+    const total_length = hmac_index + Hmac.mac_length;
 
     var hmac: [Hmac.mac_length]u8 = undefined;
     var hmac_gen = Hmac.init(&self.signing_key);
@@ -45,11 +50,9 @@ pub fn encrypt(self: Self, rng: Rng, plaintext: []const u8, buffer: []u8) Token 
     hmac_gen.update(ciphertext);
     hmac_gen.final(&hmac);
 
-    return .{
-        .iv = iv,
-        .ciphertext = ciphertext,
-        .hmac = hmac,
-    };
+    @memcpy(buffer[hmac_index..total_length], &hmac);
+
+    return total_length;
 }
 
 pub fn decrypt(self: Self, token: *const Token, buffer: []u8) Error![]const u8 {
@@ -69,12 +72,6 @@ pub fn verify(self: Self, token: *const Token) bool {
 
     return std.mem.eql(u8, &token.hmac, &hmac);
 }
-
-pub const Token = struct {
-    iv: [Aes.block_length]u8,
-    ciphertext: []const u8,
-    hmac: [Hmac.mac_length]u8,
-};
 
 const t = std.testing;
 

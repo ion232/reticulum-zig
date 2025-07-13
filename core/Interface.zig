@@ -1,10 +1,10 @@
 const std = @import("std");
-const data = @import("data.zig");
 
 pub const Manager = @import("interface/Manager.zig");
 
 const Allocator = std.mem.Allocator;
 const BitRate = @import("unit.zig").BitRate;
+const Bytes = @import("data.zig").Bytes;
 const Event = @import("Node.zig").Event;
 const Endpoint = @import("endpoint.zig").Managed;
 const Hash = @import("crypto.zig").Hash;
@@ -24,7 +24,7 @@ pub const Mode = enum {
     boundary,
     gateway,
 
-    pub fn route_lifetime(self: @This()) u64 {
+    pub fn routeLifetime(self: @This()) u64 {
         const one_day = std.time.us_per_day;
         const six_hours = 6 * std.time.us_per_hour;
         const seven_weeks = 7 * std.time.us_per_week;
@@ -81,21 +81,21 @@ pub fn init(
     };
 }
 
-pub fn announce(ptr: *anyopaque, hash: Hash, app_data: ?data.Bytes) Error!void {
+pub fn announce(ptr: *anyopaque, hash: Hash, app_data: ?Bytes) Error!void {
     try deliverEvent(ptr, Event.In{
-        .announce = .{
-            .hash = hash,
-            .app_data = app_data,
-        },
+        .announce = .{ .hash = hash, .app_data = app_data },
+    });
+}
+
+pub fn data(ptr: *anyopaque, name: Name, payload: Payload) Error!void {
+    try deliverEvent(ptr, Event.In{
+        .data = .{ .name = name, .payload = payload },
     });
 }
 
 pub fn plain(ptr: *anyopaque, name: Name, payload: Payload) Error!void {
     try deliverEvent(ptr, Event.In{
-        .plain = .{
-            .name = name,
-            .payload = payload,
-        },
+        .plain = .{ .name = name, .payload = payload },
     });
 }
 
@@ -131,6 +131,7 @@ pub fn api(self: *Self) Api {
     return .{
         .ptr = self,
         .announceFn = announce,
+        .dataFn = data,
         .plainFn = plain,
         .deliverRawPacketFn = deliverRawPacket,
         .deliverPacketFn = deliverPacket,
@@ -141,15 +142,20 @@ pub fn api(self: *Self) Api {
 
 pub const Api = struct {
     ptr: *anyopaque,
-    announceFn: *const fn (ptr: *anyopaque, hash: Hash, app_data: ?data.Bytes) Error!void,
+    announceFn: *const fn (ptr: *anyopaque, hash: Hash, app_data: ?Bytes) Error!void,
+    dataFn: *const fn (ptr: *anyopaque, name: Name, payload: Payload) Error!void,
     plainFn: *const fn (ptr: *anyopaque, name: Name, payload: Payload) Error!void,
     deliverRawPacketFn: *const fn (ptr: *anyopaque, raw_bytes: []const u8) Error!void,
     deliverPacketFn: *const fn (ptr: *anyopaque, packet: Packet) Error!void,
     deliverEventFn: *const fn (ptr: *anyopaque, event: Event.In) Error!void,
     collectEventFn: *const fn (ptr: *anyopaque) ?Event.Out,
 
-    pub fn announce(self: *@This(), hash: Hash, app_data: ?data.Bytes) Error!void {
+    pub fn announce(self: *@This(), hash: Hash, app_data: ?Bytes) Error!void {
         return self.announceFn(self.ptr, hash, app_data);
+    }
+
+    pub fn data(self: *@This(), name: Name, payload: Payload) Error!void {
+        return self.dataFn(self.ptr, name, payload);
     }
 
     pub fn plain(self: *@This(), name: Name, payload: Payload) Error!void {

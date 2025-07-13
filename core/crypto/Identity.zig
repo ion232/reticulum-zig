@@ -1,12 +1,14 @@
 const std = @import("std");
-const data = @import("../data.zig");
 const errors = std.crypto.errors;
 
+const Bytes = @import("../data.zig").Bytes;
 const X25519 = std.crypto.dh.X25519;
 const Ed25519 = std.crypto.sign.Ed25519;
+const Fernet = @import("Fernet.zig");
 const Hash = @import("Hash.zig");
 const Rng = @import("../System.zig").Rng;
 
+const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 const X25519PublicKey = [X25519.public_length]u8;
 const X25519SecretKey = [X25519.secret_length]u8;
 
@@ -66,11 +68,33 @@ pub fn random(rng: *Rng) !Self {
     };
 }
 
-// pub fn encrypt(self: *const Self, data: []u8) void {}
+pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8, ratchet: ?[32]u8) []const u8 {
+    var seed: [X25519.seed_length]u8 = undefined;
+    rng.bytes(&seed);
 
-// pub fn decrypt(self: *const Self, data: []u8) void {}
+    const ephemeral = try X25519.KeyPair.generateDeterministic(seed);
+    const public_key = if (ratchet) |r| r else self.public.dh;
+    @memcpy(buffer[0..ephemeral.public_key.len], &ephemeral.public_key);
 
-pub fn sign(self: *const Self, bytes: data.Bytes) Error!Ed25519.Signature {
+    const shared_secret = try X25519.scalarmult(ephemeral.secret_key, public_key);
+    const pseudorandom_key = Hkdf.extract(&self.hash.bytes, &shared_secret);
+
+    const derived_key: [2 * Fernet.key_length]u8 = undefined;
+    Hkdf.expand(&derived_key, &.{}, &pseudorandom_key);
+
+    const signing_key = derived_key[0..Fernet.key_length];
+    const encryption_key = derived_key[Fernet.key_length..];
+    const fernet = Fernet.init(signing_key, encryption_key);
+    const total_length = fernet.encrypt(rng, buffer[ephemeral.public_key.len..], plaintext);
+
+    return buffer[0..total_length];
+}
+
+pub fn decrypt(self: *const Self, ciphertext: []const u8) void {
+    //
+}
+
+pub fn sign(self: *const Self, bytes: Bytes) Error!Ed25519.Signature {
     if (self.secret) |secret| {
         const key_pair = Ed25519.KeyPair{
             .public_key = self.public.signature,
@@ -96,12 +120,20 @@ fn makeHash(public: Public) Hash {
 
 const t = std.testing;
 
+test "encrypt-decrypt" {
+    //
+}
+
+test "encrypt-decrypt-block-size" {
+    //
+}
+
 test "valid-signature" {
     const allocator = t.allocator;
     var rng = std.crypto.random;
     const identity = try Self.random(&rng);
 
-    var message = try data.Bytes.initCapacity(allocator, 0);
+    var message = try Bytes.initCapacity(allocator, 0);
     defer message.deinit();
 
     try message.appendSlice("this is a message");
@@ -116,7 +148,7 @@ test "invalid-signature" {
     const identity1 = try Self.random(&rng);
     const identity2 = try Self.random(&rng);
 
-    var message = try data.Bytes.initCapacity(allocator, 0);
+    var message = try Bytes.initCapacity(allocator, 0);
     defer message.deinit();
 
     try message.appendSlice("this is a message");

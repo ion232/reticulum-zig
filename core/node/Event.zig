@@ -1,6 +1,6 @@
 const std = @import("std");
-const data = @import("../data.zig");
 const endpoint = @import("../endpoint.zig");
+const Bytes = @import("../data.zig").Bytes;
 const Packet = @import("../packet.zig").Managed;
 const Payload = @import("../packet.zig").Payload;
 const Hash = @import("../crypto/Hash.zig");
@@ -9,12 +9,18 @@ const Hash = @import("../crypto/Hash.zig");
 
 pub const In = union(enum) {
     announce: Announce,
+    data: Data,
     packet: Packet,
     plain: Plain,
 
     pub const Announce = struct {
         hash: Hash,
-        app_data: ?data.Bytes,
+        app_data: ?Bytes,
+    };
+
+    pub const Data = struct {
+        name: endpoint.Name,
+        payload: Payload,
     };
 
     pub const Plain = struct {
@@ -28,6 +34,10 @@ pub const In = union(enum) {
                 if (announce.app_data) |app_data| {
                     app_data.deinit();
                 }
+            },
+            .data => |*data| {
+                data.name.deinit();
+                data.payload.deinit();
             },
             .packet => |*packet| {
                 packet.deinit();
@@ -143,12 +153,15 @@ pub const Out = union(enum) {
                         try f.entry("public.signature", "{x}", .{hex(&a.public.signature.bytes)});
                         try f.entry("name_hash", "{x}", .{hex(&a.name_hash)});
                         try f.entry("noise", "{x}", .{hex(&a.noise)});
+
                         var timestamp_bytes: [5]u8 = undefined;
                         std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
                         try f.entry("timestamp", "{x}", .{hex(&timestamp_bytes)});
+
                         if (a.ratchet) |*ratchet| {
                             try f.entry("ratchet", "{x}", .{hex(ratchet)});
                         }
+
                         try f.entry("signature", "{x}", .{hex(&a.signature.toBytes())});
 
                         if (a.application_data.items.len > 0) {

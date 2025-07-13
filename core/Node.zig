@@ -6,6 +6,7 @@ pub const Options = @import("node/Options.zig");
 
 const Allocator = std.mem.Allocator;
 const BitRate = @import("unit.zig").BitRate;
+const Datagrams = @import("Datagrams.zig");
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointBuilder = @import("endpoint.zig").Builder;
 const Endpoints = @import("endpoint/Store.zig");
@@ -36,6 +37,7 @@ endpoints: Endpoints,
 interfaces: Interfaces,
 ratchets: Ratchets,
 routes: Routes,
+datagrams: Datagrams,
 packet_filter: PacketFilter,
 
 pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Options) Error!Self {
@@ -51,6 +53,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
     const interfaces = Interfaces.init(ally, system.*);
     const ratchets = Ratchets.init(ally, &system.rng);
     const routes = Routes.init(ally);
+    const datagrams = Datagrams{};
     const packet_filter_capacity = if (builtin.target.os.tag == .freestanding and builtin.cpu.arch != .wasm32) 2048 else 32768;
     const packet_filter = try PacketFilter.init(ally, packet_filter_capacity);
 
@@ -63,6 +66,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
         .interfaces = interfaces,
         .ratchets = ratchets,
         .routes = routes,
+        .datagrams = datagrams,
         .packet_filter = packet_filter,
     };
 }
@@ -113,6 +117,7 @@ fn eventsIn(self: *Self, interface: *Interface, now: u64) !void {
 
         try switch (event) {
             .announce => |*announce| self.announceTask(interface, announce, now),
+            .data => |*data| self.dataTask(interface, data),
             .packet => |*packet| self.packetIn(interface, packet, now),
             .plain => |*plain| self.plainTask(interface, plain),
         };
@@ -146,6 +151,13 @@ fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce
     var packet = try interface.packet_factory.makeAnnounce(endpoint, app_data, now);
     defer packet.deinit();
 
+    try self.interfaces.broadcast(packet, null);
+}
+
+fn dataTask(self: *Self, interface: *Interface, data: *Event.In.Data) !void {
+    const packet = try interface.packet_factory.makeData(data.name, data.payload);
+
+    // Send it to the appropriate interface by checking next hop.
     try self.interfaces.broadcast(packet, null);
 }
 
