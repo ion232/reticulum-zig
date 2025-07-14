@@ -6,6 +6,7 @@ const X25519 = std.crypto.dh.X25519;
 const Ed25519 = std.crypto.sign.Ed25519;
 const Fernet = @import("Fernet.zig");
 const Hash = @import("Hash.zig");
+const Ratchets = @import("../Ratchets.zig");
 const Rng = @import("../System.zig").Rng;
 
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
@@ -68,7 +69,7 @@ pub fn random(rng: *Rng) !Self {
     };
 }
 
-pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8, ratchet: ?[32]u8) []const u8 {
+pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8, ratchet: ?[32]u8) ![]const u8 {
     var seed: [X25519.seed_length]u8 = undefined;
     rng.bytes(&seed);
 
@@ -76,10 +77,9 @@ pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8,
     const public_key = if (ratchet) |r| r else self.public.dh;
     @memcpy(buffer[0..ephemeral.public_key.len], &ephemeral.public_key);
 
+    const derived_key: [2 * Fernet.key_length]u8 = undefined;
     const shared_secret = try X25519.scalarmult(ephemeral.secret_key, public_key);
     const pseudorandom_key = Hkdf.extract(&self.hash.bytes, &shared_secret);
-
-    const derived_key: [2 * Fernet.key_length]u8 = undefined;
     Hkdf.expand(&derived_key, &.{}, &pseudorandom_key);
 
     const signing_key = derived_key[0..Fernet.key_length];
@@ -90,8 +90,42 @@ pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8,
     return buffer[0..total_length];
 }
 
-pub fn decrypt(self: *const Self, ciphertext: []const u8) void {
-    //
+pub fn decrypt(self: *const Self, rng: *Rng, ratchets: *const Ratchets.Queue, ciphertext: []const u8, buffer: []u8) ![]const u8 {
+    const ephemeral_public_key = ciphertext[0..X25519.secret_length];
+    const data = ciphertext[X25519.secret_length .. ciphertext.len - X25519.secret_length];
+
+    for (0..ratchets.count) |i| {
+        const ratchet = ratchets.peekItem(ratchets.count - i - 1);
+        const plaintext = self.decryptWithKey(rng, ephemeral_public_key, ratchet, data, buffer) catch continue;
+
+        return plaintext;
+    }
+
+    const secret = self.secret orelse return Error.MissingSecretKey;
+    const plaintext = try self.decryptWithKey(rng, ephemeral_public_key, secret.dh, data, buffer);
+
+    return plaintext;
+}
+
+pub fn decryptWithKey(
+    self: *const Self,
+    rng: *Rng,
+    public_key: [X25519.public_length]u8,
+    secret_key: [X25519.secret_length]u8,
+    data: []const u8,
+    buffer: []u8,
+) ![]const u8 {
+    const derived_key: [2 * Fernet.key_length]u8 = undefined;
+    const shared_secret = try X25519.scalarmult(&secret_key, &public_key);
+    const pseudorandom_key = Hkdf.extract(&self.hash.bytes, &shared_secret);
+    Hkdf.expand(&derived_key, &.{}, &pseudorandom_key);
+
+    const signing_key = derived_key[0..Fernet.key_length];
+    const encryption_key = derived_key[Fernet.key_length..];
+    const fernet = Fernet.init(signing_key, encryption_key);
+    const plaintext = fernet.decrypt(rng, data[public_key.len..], buffer);
+
+    return plaintext;
 }
 
 pub fn sign(self: *const Self, bytes: Bytes) Error!Ed25519.Signature {

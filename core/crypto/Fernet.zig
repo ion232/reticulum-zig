@@ -55,19 +55,26 @@ pub fn encrypt(self: Self, rng: Rng, buffer: []u8, plaintext: []const u8) usize 
     return total_length;
 }
 
-pub fn decrypt(self: Self, token: *const Token, buffer: []u8) Error![]const u8 {
+pub fn decrypt(self: Self, token: []const u8, buffer: []u8) Error![]const u8 {
     if (!self.verify(token)) {
         return Error.VerificationFailed;
     }
 
-    return try Aes.decrypt(buffer, token.ciphertext, self.encryption_key, token.iv);
+    const ciphertext = token[Aes.key_length .. token.len - Hmac.mac_length];
+    const hmac = token[0..Aes.key_length];
+
+    return try Aes.decrypt(buffer, ciphertext, self.encryption_key, hmac);
 }
 
-pub fn verify(self: Self, token: *const Token) bool {
+pub fn verify(self: Self, token: []const u8) bool {
     var hmac: [Hmac.mac_length]u8 = undefined;
     var hmac_gen = Hmac.init(&self.signing_key);
-    hmac_gen.update(&token.iv);
-    hmac_gen.update(token.ciphertext);
+
+    const iv = token[0..Aes.key_length];
+    const ciphertext = token[Aes.key_length .. token.len - Hmac.mac_length];
+
+    hmac_gen.update(iv);
+    hmac_gen.update(ciphertext);
     hmac_gen.final(&hmac);
 
     return std.mem.eql(u8, &token.hmac, &hmac);

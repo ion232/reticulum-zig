@@ -9,8 +9,11 @@ const System = @import("System.zig");
 
 const Self = @This();
 
+// TODO: Replace LinearFifo - a custom implementation would be a better choice here.
+pub const Queue = std.fifo.LinearFifo(Ratchet, .Dynamic);
+
 const Entry = struct {
-    ratchets: std.fifo.LinearFifo(Ratchet, .Dynamic),
+    ratchets: Queue,
     last_rotation_time: u64,
 };
 
