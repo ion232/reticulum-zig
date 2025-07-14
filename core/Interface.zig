@@ -87,9 +87,9 @@ pub fn announce(ptr: *anyopaque, hash: Hash, app_data: ?Bytes) Error!void {
     });
 }
 
-pub fn data(ptr: *anyopaque, name: Name, payload: Payload) Error!void {
+pub fn data(ptr: *anyopaque, name: Name, bytes: Bytes) Error!void {
     try deliverEvent(ptr, Event.In{
-        .data = .{ .name = name, .payload = payload },
+        .data = .{ .name = name, .bytes = bytes },
     });
 }
 
@@ -143,7 +143,7 @@ pub fn api(self: *Self) Api {
 pub const Api = struct {
     ptr: *anyopaque,
     announceFn: *const fn (ptr: *anyopaque, hash: Hash, app_data: ?Bytes) Error!void,
-    dataFn: *const fn (ptr: *anyopaque, name: Name, payload: Payload) Error!void,
+    dataFn: *const fn (ptr: *anyopaque, name: Name, bytes: Bytes) Error!void,
     plainFn: *const fn (ptr: *anyopaque, name: Name, payload: Payload) Error!void,
     deliverRawPacketFn: *const fn (ptr: *anyopaque, raw_bytes: []const u8) Error!void,
     deliverPacketFn: *const fn (ptr: *anyopaque, packet: Packet) Error!void,
@@ -154,8 +154,8 @@ pub const Api = struct {
         return self.announceFn(self.ptr, hash, app_data);
     }
 
-    pub fn data(self: *@This(), name: Name, payload: Payload) Error!void {
-        return self.dataFn(self.ptr, name, payload);
+    pub fn data(self: *@This(), name: Name, bytes: Bytes) Error!void {
+        return self.dataFn(self.ptr, name, bytes);
     }
 
     pub fn plain(self: *@This(), name: Name, payload: Payload) Error!void {

@@ -20,7 +20,7 @@ pub const In = union(enum) {
 
     pub const Data = struct {
         name: endpoint.Name,
-        payload: Payload,
+        bytes: Bytes,
     };
 
     pub const Plain = struct {
@@ -37,7 +37,7 @@ pub const In = union(enum) {
             },
             .data => |*data| {
                 data.name.deinit();
-                data.payload.deinit();
+                data.bytes.deinit();
             },
             .packet => |*packet| {
                 packet.deinit();

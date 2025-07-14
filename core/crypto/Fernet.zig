@@ -35,14 +35,14 @@ pub fn random(rng: Rng) Self {
     return self;
 }
 
-pub fn encrypt(self: Self, rng: Rng, buffer: []u8, plaintext: []const u8) usize {
+pub fn encrypt(self: Self, rng: Rng, buffer: []u8, plaintext: []const u8) []const u8 {
     var iv: [Aes.block_length]u8 = undefined;
     rng.bytes(&iv);
     @memcpy(buffer[0..iv.len], &iv);
 
     const ciphertext = Aes.encrypt(buffer[iv.len..], plaintext, self.encryption_key, iv);
     const hmac_index = iv.len + ciphertext.len;
-    const total_length = hmac_index + Hmac.mac_length;
+    const count = hmac_index + Hmac.mac_length;
 
     var hmac: [Hmac.mac_length]u8 = undefined;
     var hmac_gen = Hmac.init(&self.signing_key);
@@ -50,9 +50,9 @@ pub fn encrypt(self: Self, rng: Rng, buffer: []u8, plaintext: []const u8) usize 
     hmac_gen.update(ciphertext);
     hmac_gen.final(&hmac);
 
-    @memcpy(buffer[hmac_index..total_length], &hmac);
+    @memcpy(buffer[hmac_index..count], &hmac);
 
-    return total_length;
+    return buffer[0..count];
 }
 
 pub fn decrypt(self: Self, token: []const u8, buffer: []u8) Error![]const u8 {
@@ -60,24 +60,25 @@ pub fn decrypt(self: Self, token: []const u8, buffer: []u8) Error![]const u8 {
         return Error.VerificationFailed;
     }
 
-    const ciphertext = token[Aes.key_length .. token.len - Hmac.mac_length];
-    const hmac = token[0..Aes.key_length];
+    const iv = token[0..Aes.block_length];
+    const ciphertext = token[Aes.block_length .. token.len - Hmac.mac_length];
 
-    return try Aes.decrypt(buffer, ciphertext, self.encryption_key, hmac);
+    return try Aes.decrypt(buffer, ciphertext, self.encryption_key, iv.*);
 }
 
 pub fn verify(self: Self, token: []const u8) bool {
-    var hmac: [Hmac.mac_length]u8 = undefined;
-    var hmac_gen = Hmac.init(&self.signing_key);
+    var computed_hmac: [Hmac.mac_length]u8 = undefined;
+    var h = Hmac.init(&self.signing_key);
 
-    const iv = token[0..Aes.key_length];
-    const ciphertext = token[Aes.key_length .. token.len - Hmac.mac_length];
+    const iv = token[0..Aes.block_length];
+    const ciphertext = token[Aes.block_length .. token.len - Hmac.mac_length];
+    const hmac = token[token.len - Hmac.mac_length ..];
 
-    hmac_gen.update(iv);
-    hmac_gen.update(ciphertext);
-    hmac_gen.final(&hmac);
+    h.update(iv);
+    h.update(ciphertext);
+    h.final(&computed_hmac);
 
-    return std.mem.eql(u8, &token.hmac, &hmac);
+    return std.mem.eql(u8, hmac, &computed_hmac);
 }
 
 const t = std.testing;
@@ -94,28 +95,28 @@ test "init" {
 test "encrypt-decrypt" {
     const fernet = Self.random(std.crypto.random);
     const plaintext = "reticulum-zig!";
-    var ciphertext: [2 * Aes.block_length]u8 = undefined;
+    var token: [5 * Aes.block_length]u8 = undefined;
 
-    const token = fernet.encrypt(std.crypto.random, plaintext, &ciphertext);
-    try t.expect(fernet.verify(&token));
-    try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
+    const result = fernet.encrypt(std.crypto.random, &token, plaintext);
+    try t.expect(fernet.verify(result));
+    try t.expect(!std.mem.eql(u8, plaintext[0..], token[0..plaintext.len]));
 
-    var buffer: [ciphertext.len]u8 = undefined;
-    const computed_plaintext = try fernet.decrypt(&token, &buffer);
+    var buffer: [token.len]u8 = undefined;
+    const computed_plaintext = try fernet.decrypt(result, &buffer);
     try t.expectEqualSlices(u8, plaintext, computed_plaintext);
 }
 
 test "encrypt-decrypt-block-size" {
     const fernet = Self.random(std.crypto.random);
     const plaintext = "reticulum ⚡️";
-    var ciphertext: [2 * Aes.block_length]u8 = undefined;
+    var token: [5 * Aes.block_length]u8 = undefined;
     try t.expect(plaintext.len == Aes.block_length);
 
-    const token = fernet.encrypt(std.crypto.random, plaintext, &ciphertext);
-    try t.expect(fernet.verify(&token));
-    try t.expect(!std.mem.eql(u8, plaintext[0..], ciphertext[0..plaintext.len]));
+    const result = fernet.encrypt(std.crypto.random, &token, plaintext);
+    try t.expect(fernet.verify(result));
+    try t.expect(!std.mem.eql(u8, plaintext[0..], token[0..plaintext.len]));
 
-    var buffer: [ciphertext.len]u8 = undefined;
-    const computed_plaintext = try fernet.decrypt(&token, &buffer);
+    var buffer: [token.len]u8 = undefined;
+    const computed_plaintext = try fernet.decrypt(result, &buffer);
     try t.expectEqualSlices(u8, plaintext, computed_plaintext);
 }

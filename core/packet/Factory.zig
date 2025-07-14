@@ -232,20 +232,18 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
         .build();
 }
 
-pub fn makeData(self: *Self, name: Name, payload: packet.Payload) Error!Packet {
+pub fn makeData(self: *Self, name: Name, bytes: data.Bytes) Error!Packet {
     var builder = Builder.init(self.ally);
 
     if (self.config.access_code) |interface_access_code| {
         _ = try builder.setInterfaceAccessCode(interface_access_code);
     }
 
-    const plain = try builder
-        .setVariant(.plain)
+    return try builder
+        .setVariant(.single)
         .setEndpoint(name.hash.short().*)
-        .setPayload(payload)
+        .setPayload(packet.Payload.makeRaw(bytes))
         .build();
-
-    return plain;
 }
 
 pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet {
@@ -255,11 +253,9 @@ pub fn makePlain(self: *Self, name: Name, payload: packet.Payload) Error!Packet 
         _ = try builder.setInterfaceAccessCode(interface_access_code);
     }
 
-    const plain = try builder
+    return try builder
         .setVariant(.plain)
         .setEndpoint(name.hash.short().*)
         .setPayload(payload)
         .build();
-
-    return plain;
 }

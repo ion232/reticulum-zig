@@ -241,13 +241,13 @@ test "validate-raw-announce-roundtrip" {
 test "validate-make-announce" {
     const t = std.testing;
     const ally = t.allocator;
-    var rng = std.crypto.random;
+    const rng = std.crypto.random;
 
     var builder = endpoint.Builder.init(ally);
     defer builder.deinit();
 
     var announce_endpoint = try builder
-        .setIdentity(try crypto.Identity.random(&rng))
+        .setIdentity(try crypto.Identity.random(rng))
         .setDirection(.in)
         .setVariant(.single)
         .setName(try endpoint.Name.init("endpoint", &.{"test"}, ally))

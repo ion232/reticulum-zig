@@ -83,9 +83,8 @@ test "main" {
         var builder = Builder.init(ally);
         defer builder.deinit();
 
-        var rng = std.crypto.random;
         const endpoint = try builder
-            .setIdentity(try Identity.random(&rng))
+            .setIdentity(try Identity.random(std.crypto.random))
             .setName(try Name.init("endpoint", &.{"main"}, ally))
             .setDirection(.in)
             .setVariant(.single)

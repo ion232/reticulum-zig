@@ -43,7 +43,7 @@ packet_filter: PacketFilter,
 pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Options) Error!Self {
     var endpoint_builder = EndpointBuilder.init(ally);
     var main_endpoint = try endpoint_builder
-        .setIdentity(identity orelse try Identity.random(&system.rng))
+        .setIdentity(identity orelse try Identity.random(system.rng))
         .setDirection(.in)
         .setVariant(.single)
         .setName(try Name.init(options.name, &.{}, ally))
@@ -155,7 +155,7 @@ fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce
 }
 
 fn dataTask(self: *Self, interface: *Interface, data: *Event.In.Data) !void {
-    const packet = try interface.packet_factory.makeData(data.name, data.payload);
+    const packet = try interface.packet_factory.makeData(data.name, data.bytes);
 
     // Send it to the appropriate interface by checking next hop.
     try self.interfaces.broadcast(packet, null);

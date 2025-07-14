@@ -43,7 +43,7 @@ pub fn fromPublic(public: Public) Self {
     };
 }
 
-pub fn random(rng: *Rng) !Self {
+pub fn random(rng: Rng) !Self {
     var dh_seed: [X25519.seed_length]u8 = undefined;
     var signature_seed: [Ed25519.KeyPair.seed_length]u8 = undefined;
 
@@ -77,53 +77,50 @@ pub fn encrypt(self: *const Self, rng: Rng, plaintext: []const u8, buffer: []u8,
     const public_key = if (ratchet) |r| r else self.public.dh;
     @memcpy(buffer[0..ephemeral.public_key.len], &ephemeral.public_key);
 
-    const derived_key: [2 * Fernet.key_length]u8 = undefined;
+    var derived_key: [2 * Fernet.key_length]u8 = undefined;
     const shared_secret = try X25519.scalarmult(ephemeral.secret_key, public_key);
     const pseudorandom_key = Hkdf.extract(&self.hash.bytes, &shared_secret);
-    Hkdf.expand(&derived_key, &.{}, &pseudorandom_key);
+    Hkdf.expand(&derived_key, &.{}, pseudorandom_key);
 
     const signing_key = derived_key[0..Fernet.key_length];
     const encryption_key = derived_key[Fernet.key_length..];
     const fernet = Fernet.init(signing_key, encryption_key);
-    const total_length = fernet.encrypt(rng, buffer[ephemeral.public_key.len..], plaintext);
-
-    return buffer[0..total_length];
+    return fernet.encrypt(rng, buffer[ephemeral.public_key.len..], plaintext);
 }
 
-pub fn decrypt(self: *const Self, rng: *Rng, ratchets: *const Ratchets.Queue, ciphertext: []const u8, buffer: []u8) ![]const u8 {
+pub fn decrypt(self: *const Self, ratchets: *const Ratchets.Queue, ciphertext: []const u8, buffer: []u8) ![]const u8 {
     const ephemeral_public_key = ciphertext[0..X25519.secret_length];
     const data = ciphertext[X25519.secret_length .. ciphertext.len - X25519.secret_length];
 
     for (0..ratchets.count) |i| {
         const ratchet = ratchets.peekItem(ratchets.count - i - 1);
-        const plaintext = self.decryptWithKey(rng, ephemeral_public_key, ratchet, data, buffer) catch continue;
+        const plaintext = self.decryptWithKey(ephemeral_public_key.*, ratchet, data, buffer) catch continue;
 
         return plaintext;
     }
 
     const secret = self.secret orelse return Error.MissingSecretKey;
-    const plaintext = try self.decryptWithKey(rng, ephemeral_public_key, secret.dh, data, buffer);
+    const plaintext = try self.decryptWithKey(ephemeral_public_key.*, secret.dh, data, buffer);
 
     return plaintext;
 }
 
 pub fn decryptWithKey(
     self: *const Self,
-    rng: *Rng,
     public_key: [X25519.public_length]u8,
     secret_key: [X25519.secret_length]u8,
     data: []const u8,
     buffer: []u8,
 ) ![]const u8 {
-    const derived_key: [2 * Fernet.key_length]u8 = undefined;
-    const shared_secret = try X25519.scalarmult(&secret_key, &public_key);
+    var derived_key: [2 * Fernet.key_length]u8 = undefined;
+    const shared_secret = try X25519.scalarmult(secret_key, public_key);
     const pseudorandom_key = Hkdf.extract(&self.hash.bytes, &shared_secret);
-    Hkdf.expand(&derived_key, &.{}, &pseudorandom_key);
+    Hkdf.expand(&derived_key, &.{}, pseudorandom_key);
 
     const signing_key = derived_key[0..Fernet.key_length];
     const encryption_key = derived_key[Fernet.key_length..];
     const fernet = Fernet.init(signing_key, encryption_key);
-    const plaintext = fernet.decrypt(rng, data[public_key.len..], buffer);
+    const plaintext = fernet.decrypt(data, buffer);
 
     return plaintext;
 }
@@ -155,7 +152,23 @@ fn makeHash(public: Public) Hash {
 const t = std.testing;
 
 test "encrypt-decrypt" {
-    //
+    const ally = t.allocator;
+    const identity = try Self.random(std.crypto.random);
+
+    var message = Bytes.init(ally);
+    defer message.deinit();
+    try message.appendSlice("this is a message");
+
+    var ciphertext: [256]u8 = undefined;
+    const encrypted = try identity.encrypt(std.crypto.random, message.items, &ciphertext, null);
+
+    var plaintext: [256]u8 = undefined;
+    const queue = Ratchets.Queue.init(ally);
+    const decrypted = try identity.decrypt(&queue, encrypted, &plaintext);
+
+    std.debug.print("{any} {any} {any}", .{ message, encrypted, decrypted });
+
+    try t.expect(false);
 }
 
 test "encrypt-decrypt-block-size" {
@@ -163,11 +176,10 @@ test "encrypt-decrypt-block-size" {
 }
 
 test "valid-signature" {
-    const allocator = t.allocator;
-    var rng = std.crypto.random;
-    const identity = try Self.random(&rng);
+    const ally = t.allocator;
+    const identity = try Self.random(std.crypto.random);
 
-    var message = try Bytes.initCapacity(allocator, 0);
+    var message = Bytes.init(ally);
     defer message.deinit();
 
     try message.appendSlice("this is a message");
@@ -177,12 +189,11 @@ test "valid-signature" {
 }
 
 test "invalid-signature" {
-    const allocator = t.allocator;
-    var rng = std.crypto.random;
-    const identity1 = try Self.random(&rng);
-    const identity2 = try Self.random(&rng);
+    const ally = t.allocator;
+    const identity1 = try Self.random(std.crypto.random);
+    const identity2 = try Self.random(std.crypto.random);
 
-    var message = try Bytes.initCapacity(allocator, 0);
+    var message = Bytes.init(ally);
     defer message.deinit();
 
     try message.appendSlice("this is a message");
