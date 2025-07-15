@@ -8,46 +8,60 @@ const Hash = @import("../crypto/Hash.zig");
 // TODO: Perhaps distinguish between tasks and packets.
 
 pub const In = union(enum) {
-    announce: Announce,
+    pub const Task = union(enum) {
+        pub const Announce = struct {
+            hash: Hash,
+            app_data: ?data.Bytes,
+        };
+
+        pub const Plain = struct {
+            name: endpoint.Name,
+            payload: Payload,
+        };
+
+        announce: Announce,
+        plain: Plain,
+    };
+
     packet: Packet,
-    plain: Plain,
-
-    pub const Announce = struct {
-        hash: Hash,
-        app_data: ?data.Bytes,
-    };
-
-    pub const Plain = struct {
-        name: endpoint.Name,
-        payload: Payload,
-    };
+    task: Task,
 
     pub fn deinit(self: *@This()) void {
         switch (self.*) {
-            .announce => |*announce| {
-                if (announce.app_data) |app_data| {
-                    app_data.deinit();
-                }
-            },
             .packet => |*packet| {
                 packet.deinit();
             },
-            .plain => |*plain| {
-                plain.name.deinit();
-                plain.payload.deinit();
+            .task => |*task| switch (task.*) {
+                .announce => |*announce| {
+                    if (announce.app_data) |app_data| {
+                        app_data.deinit();
+                    }
+                },
+                .plain => |*plain| {
+                    plain.name.deinit();
+                    plain.payload.deinit();
+                },
             },
         }
     }
 };
 
 pub const Out = union(enum) {
+    pub const Task = union(enum) {
+        pub const Process = struct { at: u64 };
+
+        process: Process,
+    };
+
     packet: Packet,
+    task: Task,
 
     pub fn deinit(self: *@This()) void {
         switch (self.*) {
             .packet => |*packet| {
                 packet.deinit();
             },
+            .task => {},
         }
     }
 

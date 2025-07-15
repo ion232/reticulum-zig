@@ -22,9 +22,7 @@ const Name = @import("endpoint/Name.zig");
 const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
 const System = @import("System.zig");
 
-pub const Error = error{
-    InvalidAnnounce,
-} || Interfaces.Error || Identity.Error || EndpointBuilder.Error || Name.Error || Allocator.Error;
+pub const Error = error{} || Interfaces.Error || Packet.ValidationError || Identity.Error || EndpointBuilder.Error || Name.Error || Allocator.Error;
 
 const Self = @This();
 
@@ -180,26 +178,74 @@ fn plainTask(self: *Self, interface: *Interface, plain: *Event.In.Plain) !void {
     try self.interfaces.broadcast(packet, null);
 }
 
-fn packetOut(self: *Self, interface: *Interface, packet: *Packet) !bool {
+fn packetOut(self: *Self, originating_interface: ?*Interface, packet: *Packet, now: u64) !bool {
     _ = self;
 
     const purpose = packet.header.purpose;
     const variant = packet.header.endpoint;
     const hops = packet.header.hops;
 
-    if (purpose == .announce) {
-        try interface.outgoing.push(.{ .packet = packet.* });
-        return false;
-    }
+    var transmitted = false;
 
-    if (variant == .plain and hops == 0) {
-        try interface.outgoing.push(.{ .packet = packet.* });
-        return false;
-    }
+    // TODO: Handle tracking packet delivery here.
 
-    // Put into transport if we know where it's going.
-    // Otherwise broadcast.
-    // Store the packet hash.
+    const endpoint = packet.endpoints.endpoint();
+
+    if (self.routes.get(endpoint)) |route| {
+        if (purpose != .announce and variant != .plain and variant != .group) {
+            if (route.hops > 1 and packet.header.format == .normal) {
+                packet.header.format = .transport;
+                packet.endpoints = .{
+                    .transport = .{
+                        .endpoint = endpoint,
+                        .transport_id = route.next_hop,
+                    },
+                };
+            }
+
+            self.routes.setLastSeen(endpoint, now);
+            try interface.outgoing.push(.{ .packet = packet.* });
+            transmitted = true;
+        }
+    } else {
+        var should_transmit = true;
+
+        // TODO: If the endpoint variant is a link, don't transmit if closed.
+        // TODO: If interface is not the one we expect for this packet, don't transmit.
+        
+        if (purpose == .announce and originating_interface == null) {
+            switch (interface.mode) {
+                .access_point => should_transmit = false,
+                .roaming => if (self.endpoints.get(endpoint)) |_| {
+                    // TODO: If has associated interface and that interface is in roaming or boundary, do not transmit.
+                },
+                .boundary => if (self.endpoints.get(endpoint)) |_| {
+                    // TODO: If has associated interface and that interface is in roaming, do not transmit.
+                },
+                else => if (hops > 0) {
+                    // Get announce cap, announce_allowed_at and announce_queue.
+                    // If interface queue has announces and now is past announce_allowed_at:
+                    // Get wait time from bit rate and packet size.
+                    // Set interface announce allowed at, whatever that means.
+
+                    // Else:
+                    should_transmit = false;
+                    // If not max announce queue length:
+                    var should_queue = false;
+                    // If there's already a similar announce in the queue and the current announce is newer, replace it with that one.
+                    // Make sure the priority queue is recalculated to reflect this.
+                    // should_queue = false if we replace an entry.
+                    // Otherwise, make an entry, using the timestamp from the packet noise, and add it.
+                    // If the interface queue was empty, send a process task out so that the announce queue gets processed.
+                },
+            }
+        }
+
+        if (should_transmit) {
+            // Add the packet hash to the filter, but make sure to only do it once.
+            // Transmit the packet.
+        }
+    }
 
     return true;
 }
@@ -260,6 +306,12 @@ fn announcePacketIn(self: *Self, now: u64, interface: *Interface, packet: *Packe
     const noise = packet.payload.announce.noise;
     const timestamp = packet.payload.announce.timestamp;
 
+    // If hash isn't in routes, apply potential ingress limiting, hold packet and return.
+    // If not one of our endpoints and packet is in transport:
+    // Get announce entry from table.
+    // If entry hops is hops - 1, increment local broadcast count and if at max then remove from table.
+    // If entry hops is hops - 2 and retries is more than 0 and retransmission timeout reached, remove from table.
+
     if (self.endpoints.has(&endpoint) or hops >= max_hops) {
         return;
     }
@@ -281,6 +333,7 @@ fn announcePacketIn(self: *Self, now: u64, interface: *Interface, packet: *Packe
     }
 
     self.routes.setState(endpoint, .unknown);
+
 
     if (self.options.transport_enabled and packet.context != .path_response) {
         // Needs announce rate implementation.
@@ -322,12 +375,24 @@ fn proofPacketIn(self: *Self, now: u64, packet: *Packet) !void {
     _ = packet;
 }
 
-fn shouldDrop(self: *const Self, packet: *const Packet) bool {
-    if (self.packet_filter.has(packet)) {
-        return true;
+fn shouldDrop(self: *Self, packet: *const Packet) !void {
+    const endpoint = packet.header.endpoint;
+    const purpose = packet.header.purpose;
+    const hops = packet.header.hops;
+
+    if (packet.endpoints == .transport and purpose != .announce) {
+        if (!std.mem.eql(u8, packet.endpoints.nextHop()[0..], self.endpoints.main.hash.short()[0..])) {
+            return true;
+        }
     }
 
-    return false;
+    switch (packet.context) {
+        .keep_alive, .resource_request, .resource_proof, .resource, .cache_request, .link_channel => return false;
+        else => switch (endpoint) {
+            .plain, .group => return purpose == .announce or hops > 1,
+            else => return !(self.packet_filter.has(packet) and purpose == .announce and endpoint == .single);
+        }
+    }
 }
 
 pub fn deinit(self: *Self) void {

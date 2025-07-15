@@ -10,6 +10,11 @@ const Endpoints = packet.Endpoints;
 const Payload = packet.Payload;
 const Hash = crypto.Hash;
 
+pub const ValidationError = error{
+    InvalidAnnounce,
+    MismatchedHashes,
+};
+
 const Self = @This();
 
 ally: Allocator,
@@ -41,6 +46,10 @@ pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
 }
 
 pub fn validate(self: *const Self) !void {
+    if (self.header.purpose == .announce and self.header.endpoint != .single) {
+        return ValidationError.InvalidAnnouncePacket;
+    }
+
     switch (self.payload) {
         .announce => |a| {
             var signed_data = std.ArrayList(u8).init(self.ally);
@@ -75,7 +84,7 @@ pub fn validate(self: *const Self) !void {
 
             const hashes_match = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
             if (!hashes_match) {
-                return error.MismatchedHashes;
+                return ValidationError.MismatchedHashes;
             }
         },
         else => return,

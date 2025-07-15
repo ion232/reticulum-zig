@@ -36,6 +36,7 @@ pub const Mode = enum {
         };
     }
 };
+pub const Directionality = enum { in, out, full };
 pub const Incoming = ThreadSafeFifo(Event.In);
 pub const Outgoing = ThreadSafeFifo(Event.Out);
 pub const Config = struct {
@@ -60,6 +61,7 @@ incoming: *Incoming,
 outgoing: *Outgoing,
 packet_factory: PacketFactory,
 mode: Mode,
+directionality: Directionality,
 bit_rate: ?BitRate,
 
 pub fn init(
@@ -77,6 +79,7 @@ pub fn init(
         .outgoing = outgoing,
         .packet_factory = packet_factory,
         .mode = config.mode,
+        .directionality = config.directionality,
         .bit_rate = config.initial_bit_rate,
     };
 }
