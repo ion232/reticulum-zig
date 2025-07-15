@@ -57,9 +57,13 @@ const Builder = struct {
             .linkage = .static,
         });
 
-        const exports = @import("core/exports.zig");
         const write_files = self.b.addWriteFiles();
-        const header_path = write_files.add("rt_core.h", exports.generateHeader());
+        const bindings = @import("core/bindings.zig");
+        const data = bindings.data(.c, self.b.allocator) catch |err| {
+            std.debug.print("Failed to generate header: {any}", .{err});
+            std.process.exit(1);
+        };
+        const header_path = write_files.add("rt_core.h", data.items);
 
         const install_header_file = self.b.addInstallHeaderFile(header_path, "rt_core.h");
         const install_static_lib = self.b.addInstallArtifact(static_lib, .{});
