@@ -24,7 +24,7 @@ pub const Mode = enum {
     boundary,
     gateway,
 
-    pub fn route_lifetime(self: @This()) u64 {
+    pub fn routeLifetime(self: @This()) u64 {
         const one_day = std.time.us_per_day;
         const six_hours = 6 * std.time.us_per_hour;
         const seven_weeks = 7 * std.time.us_per_week;
@@ -43,6 +43,7 @@ pub const Config = struct {
     name: []const u8 = "unknown",
     access_code: ?[]const u8 = null,
     mode: Mode = .full,
+    directionality: Directionality = .full,
     initial_bit_rate: BitRate = BitRate.default,
     max_held_packets: usize = 1000,
 };

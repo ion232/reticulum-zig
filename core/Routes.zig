@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const crypto = @import("crypto.zig");
 
@@ -80,7 +81,7 @@ pub fn updateFrom(self: *Self, packet: *const Packet, interface: *const Interfac
         .next_hop = next_hop,
         .hops = packet.header.hops,
         .last_seen = now,
-        .expiry_time = now + interface.mode.route_lifetime(),
+        .expiry_time = now + interface.mode.routeLifetime(),
         .noises = Entry.Noises.init(self.ally),
         .latest_timestamp = timestamp,
         .packet_hash = packet.hash(),
@@ -90,6 +91,12 @@ pub fn updateFrom(self: *Self, packet: *const Packet, interface: *const Interfac
     if (self.entries.getPtr(&endpoint)) |current_entry| {
         entry.noises = current_entry.noises;
         entry.latest_timestamp = @max(timestamp, entry.latest_timestamp);
+    }
+
+    const max_noises = if (builtin.os.tag == .freestanding) 16 else 64;
+
+    if (entry.noises.count() >= max_noises) {
+        entry.noises.orderedRemoveAt(0);
     }
 
     try entry.noises.put(.{

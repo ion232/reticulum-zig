@@ -5,6 +5,7 @@ pub const Event = @import("node/Event.zig");
 pub const Options = @import("node/Options.zig");
 
 const Allocator = std.mem.Allocator;
+const Announces = @import("Announces.zig");
 const BitRate = @import("unit.zig").BitRate;
 const Endpoint = @import("endpoint.zig").Managed;
 const EndpointBuilder = @import("endpoint.zig").Builder;
@@ -34,6 +35,7 @@ endpoints: Endpoints,
 interfaces: Interfaces,
 ratchets: Ratchets,
 routes: Routes,
+announces: Announces,
 packet_filter: PacketFilter,
 
 pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Options) Error!Self {
@@ -49,6 +51,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
     const interfaces = Interfaces.init(ally, system.*);
     const ratchets = Ratchets.init(ally, &system.rng);
     const routes = Routes.init(ally);
+    const announces = Announces.init(ally);
     const packet_filter_capacity = if (builtin.target.os.tag == .freestanding and builtin.cpu.arch != .wasm32) 2048 else 32768;
     const packet_filter = try PacketFilter.init(ally, packet_filter_capacity);
 
@@ -61,6 +64,7 @@ pub fn init(ally: Allocator, system: *System, identity: ?Identity, options: Opti
         .interfaces = interfaces,
         .ratchets = ratchets,
         .routes = routes,
+        .announces = announces,
         .packet_filter = packet_filter,
     };
 }
@@ -89,6 +93,17 @@ pub fn mainEndpoint(self: *Self) Hash {
 pub fn process(self: *Self) !void {
     self.mutex.lock();
     defer self.mutex.unlock();
+
+    // Active and pending links.
+    // Timed out packets.
+    // Announce retransmissions.
+    // Invalidated path requests.
+    // Path request timeouts.
+    // Reverse table timeouts.
+    // Link timeouts.
+    // Route timeouts.
+    // Process interface held announces.
+    // Packet cache.
 
     const now = self.system.clock.monotonicMicros();
     var interfaces = self.interfaces.iterator();
@@ -212,7 +227,7 @@ fn packetOut(self: *Self, originating_interface: ?*Interface, packet: *Packet, n
 
         // TODO: If the endpoint variant is a link, don't transmit if closed.
         // TODO: If interface is not the one we expect for this packet, don't transmit.
-        
+
         if (purpose == .announce and originating_interface == null) {
             switch (interface.mode) {
                 .access_point => should_transmit = false,
@@ -334,25 +349,22 @@ fn announcePacketIn(self: *Self, now: u64, interface: *Interface, packet: *Packe
 
     self.routes.setState(endpoint, .unknown);
 
-
     if (self.options.transport_enabled and packet.context != .path_response) {
-        // Needs announce rate implementation.
-        const rate_blocked = false;
-
-        if (rate_blocked) {
-            std.log.debug("Propagation of announce ({s}) was rate blocked.", .{endpoint});
-        } else {
-            // Should be put in to announce table.
-            var announce = try packet.clone();
-            defer announce.deinit();
-
-            try announce.setTransport(self.endpoints.main.hash.short());
-            try self.interfaces.broadcast(announce, interface.id);
-        }
+        // Should be put in to announce table.
+        const announce = try packet.clone();
+        const retransmit_delay = self.system.rng.intRangeAtMost(u64, 0, 500_000);
+        try self.announces.add(
+            endpoint,
+            announce,
+            interface.id,
+            hops,
+            retransmit_delay,
+            now,
+        );
     }
 
-    // Check if the announce matches any discovery path requests and answer it if so.
-    // (implementation needed).
+    // TODO: Check if the announce matches any discovery path requests and answer it if so.
+    // TODO: Cache packet if announce.
 
     try self.routes.updateFrom(packet, interface, now);
 }
@@ -375,7 +387,7 @@ fn proofPacketIn(self: *Self, now: u64, packet: *Packet) !void {
     _ = packet;
 }
 
-fn shouldDrop(self: *Self, packet: *const Packet) !void {
+fn shouldDrop(self: *Self, packet: *const Packet) !bool {
     const endpoint = packet.header.endpoint;
     const purpose = packet.header.purpose;
     const hops = packet.header.hops;
@@ -387,11 +399,11 @@ fn shouldDrop(self: *Self, packet: *const Packet) !void {
     }
 
     switch (packet.context) {
-        .keep_alive, .resource_request, .resource_proof, .resource, .cache_request, .link_channel => return false;
+        .keep_alive, .resource_request, .resource_proof, .resource, .cache_request, .link_channel => return false,
         else => switch (endpoint) {
             .plain, .group => return purpose == .announce or hops > 1,
-            else => return !(self.packet_filter.has(packet) and purpose == .announce and endpoint == .single);
-        }
+            else => return !(self.packet_filter.has(packet) and purpose == .announce and endpoint == .single),
+        },
     }
 }
 
