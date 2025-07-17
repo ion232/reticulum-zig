@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const unit = @import("../unit.zig");
 
@@ -16,8 +17,23 @@ pub const Error = error{
     TooManyInterfaces,
 } || Allocator.Error;
 
+pub const Pending = std.fifo.LinearFifo(Entry.PendingEvent, .Dynamic);
+pub const AnnounceEntry = struct {
+    announce: Packet,
+    timestamp: u64,
+};
+
+pub const EgressControl = struct {
+    pub const max_queued_announces = if (builtin.target.os.tag == .freestanding) 32 else 16384;
+
+    const AnnounceQueue = std.PriorityQueue(AnnounceEntry, compareAnnounces);
+
+    announce_queue: AnnounceQueue,
+    announce_release_time: u64,
+    announce_capacity: u8,
+};
+
 const Entry = struct {
-    const Pending = std.fifo.LinearFifo(PendingEvent, .Dynamic);
     const PendingEvent = struct {
         event: Event.Out,
         origin_id: Interface.Id,
@@ -60,6 +76,7 @@ const Entry = struct {
     interface: *Interface,
     pending: Pending,
     metrics: Metrics,
+    egress_control: EgressControl,
     ingress_control: IngressControl,
     held_announces: std.StringArrayHashMap(Packet),
     creation_time: u64,
@@ -250,4 +267,10 @@ pub fn deinit(self: *Self) void {
 
     self.entries.deinit();
     self.* = undefined;
+}
+
+fn compareAnnounces(ctx: void, a: Packet, b: Packet) std.math.Order {
+    _ = ctx;
+
+    return std.math.order(a.header.hops, b.header.hops);
 }

@@ -44,7 +44,7 @@ pub const Config = struct {
     access_code: ?[]const u8 = null,
     mode: Mode = .full,
     directionality: Directionality = .full,
-    initial_bit_rate: BitRate = BitRate.default,
+    bit_rate: BitRate = BitRate.default,
     max_held_packets: usize = 1000,
 };
 
@@ -63,6 +63,7 @@ outgoing: *Outgoing,
 packet_factory: PacketFactory,
 mode: Mode,
 directionality: Directionality,
+bit_rate: ?BitRate,
 
 pub fn init(
     ally: Allocator,
@@ -80,6 +81,7 @@ pub fn init(
         .packet_factory = packet_factory,
         .mode = config.mode,
         .directionality = config.directionality,
+        .bit_rate = config.bit_rate,
     };
 }
 

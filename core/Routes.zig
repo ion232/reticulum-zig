@@ -16,7 +16,7 @@ pub const Entry = struct {
     };
     const Noises = std.AutoArrayHashMap(TimestampedNoise, void);
 
-    origin_interface: Interface.Id,
+    origin_interface_id: Interface.Id,
     next_hop: Hash.Short,
     hops: u8,
     last_seen: u64,
@@ -77,7 +77,7 @@ pub fn updateFrom(self: *Self, announce: *const Packet, interface: *const Interf
     const noise = announce.payload.announce.noise;
 
     var entry = Entry{
-        .origin_interface = interface.id,
+        .origin_interface_id = interface.id,
         .next_hop = next_hop,
         .hops = announce.header.hops,
         .last_seen = now,
