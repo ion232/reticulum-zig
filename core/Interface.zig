@@ -63,7 +63,6 @@ outgoing: *Outgoing,
 packet_factory: PacketFactory,
 mode: Mode,
 directionality: Directionality,
-bit_rate: ?BitRate,
 
 pub fn init(
     ally: Allocator,
@@ -81,7 +80,6 @@ pub fn init(
         .packet_factory = packet_factory,
         .mode = config.mode,
         .directionality = config.directionality,
-        .bit_rate = config.initial_bit_rate,
     };
 }
 

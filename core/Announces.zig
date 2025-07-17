@@ -58,6 +58,12 @@ pub fn add(
     }
 }
 
+pub fn remove(self: *Self, endpoint: Hash.Short) void {
+    const key = self.entries.getKeyPtr(&endpoint) orelse return;
+    _ = self.entries.swapRemove(key.*);
+    self.ally.free(key.*);
+}
+
 pub fn getPtr(self: *Self, endpoint: Hash.Short) ?*Entry {
     return self.entries.getPtr(&endpoint);
 }

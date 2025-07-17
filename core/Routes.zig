@@ -16,7 +16,7 @@ pub const Entry = struct {
     };
     const Noises = std.AutoArrayHashMap(TimestampedNoise, void);
 
-    source_interface: Interface.Id,
+    origin_interface: Interface.Id,
     next_hop: Hash.Short,
     hops: u8,
     last_seen: u64,
@@ -70,21 +70,21 @@ pub fn setState(self: *Self, endpoint: Hash.Short, state: State) void {
     }
 }
 
-pub fn updateFrom(self: *Self, packet: *const Packet, interface: *const Interface, now: u64) !void {
-    const endpoint = packet.endpoints.endpoint();
-    const next_hop = packet.endpoints.nextHop();
-    const timestamp = packet.payload.announce.timestamp;
-    const noise = packet.payload.announce.noise;
+pub fn updateFrom(self: *Self, announce: *const Packet, interface: *const Interface, now: u64) !void {
+    const endpoint = announce.endpoints.endpoint();
+    const next_hop = announce.endpoints.nextHop();
+    const timestamp = announce.payload.announce.timestamp;
+    const noise = announce.payload.announce.noise;
 
     var entry = Entry{
-        .source_interface = interface.id,
+        .origin_interface = interface.id,
         .next_hop = next_hop,
-        .hops = packet.header.hops,
+        .hops = announce.header.hops,
         .last_seen = now,
         .expiry_time = now + interface.mode.routeLifetime(),
         .noises = Entry.Noises.init(self.ally),
         .latest_timestamp = timestamp,
-        .packet_hash = packet.hash(),
+        .packet_hash = announce.hash(),
         .state = .unknown,
     };
 

@@ -115,7 +115,7 @@ pub fn process(self: *Self) !void {
     interfaces = self.interfaces.iterator();
 
     while (interfaces.next()) |entry| {
-        try self.eventsOut(entry.interface, &entry.pending_out);
+        try self.eventsOut(entry.interface, &entry.pending);
     }
 }
 
@@ -132,12 +132,18 @@ fn eventsIn(self: *Self, interface: *Interface, now: u64) !void {
     }
 }
 
-fn eventsOut(self: *Self, interface: *Interface, pending_out: *Interface.Outgoing) !void {
-    while (pending_out.pop()) |event_out| {
-        var event = event_out;
+fn eventsOut(self: *Self, interface: *Interface, pending: *Interface.Outgoing, now: u64) !void {
+    while (pending.pop()) |entry| {
+        var event = entry.event;
+        const origin_interface = if (entry.origin_id) |id| self.interfaces.getPtr(id) else null;
 
         const not_sent = switch (event) {
-            .packet => |*packet| self.packetOut(interface, packet),
+            .packet => |*packet| self.packetOut(
+                interface,
+                packet,
+                origin_interface,
+                now,
+            ),
         } catch true;
 
         if (not_sent) {
@@ -181,10 +187,10 @@ fn packetIn(self: *Self, interface: *Interface, packet: *Packet, now: u64) !void
     try self.transport(now, packet);
 
     try switch (header.purpose) {
-        .announce => self.announcePacketIn(now, interface, packet),
-        .data => self.dataPacketIn(now, packet),
-        .link_request => self.linkRequestPacketIn(now, packet),
-        .proof => self.proofPacketIn(now, packet),
+        .announce => self.announcePacketIn(interface, packet, now),
+        .data => self.dataPacketIn(packet, now),
+        .link_request => self.linkRequestPacketIn(packet, now),
+        .proof => self.proofPacketIn(packet, now),
     };
 }
 
@@ -193,9 +199,7 @@ fn plainTask(self: *Self, interface: *Interface, plain: *Event.In.Plain) !void {
     try self.interfaces.broadcast(packet, null);
 }
 
-fn packetOut(self: *Self, originating_interface: ?*Interface, packet: *Packet, now: u64) !bool {
-    _ = self;
-
+fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, packet: *Packet, now: u64) !bool {
     const purpose = packet.header.purpose;
     const variant = packet.header.endpoint;
     const hops = packet.header.hops;
@@ -228,7 +232,7 @@ fn packetOut(self: *Self, originating_interface: ?*Interface, packet: *Packet, n
         // TODO: If the endpoint variant is a link, don't transmit if closed.
         // TODO: If interface is not the one we expect for this packet, don't transmit.
 
-        if (purpose == .announce and originating_interface == null) {
+        if (purpose == .announce and origin_interface == null) {
             switch (interface.mode) {
                 .access_point => should_transmit = false,
                 .roaming => if (self.endpoints.get(endpoint)) |_| {
@@ -244,9 +248,9 @@ fn packetOut(self: *Self, originating_interface: ?*Interface, packet: *Packet, n
                     // Set interface announce allowed at, whatever that means.
 
                     // Else:
-                    should_transmit = false;
+                    // should_transmit = false;
                     // If not max announce queue length:
-                    var should_queue = false;
+                    // var should_queue = false;
                     // If there's already a similar announce in the queue and the current announce is newer, replace it with that one.
                     // Make sure the priority queue is recalculated to reflect this.
                     // should_queue = false if we replace an entry.
@@ -299,7 +303,7 @@ fn transport(self: *Self, now: u64, packet: *Packet) !void {
             }
 
             self.routes.setLastSeen(endpoint, now);
-            try self.interfaces.transmit(packet, route.source_interface);
+            try self.interfaces.transmit(packet, route.origin_interface);
         }
     }
 
@@ -310,52 +314,52 @@ fn transport(self: *Self, now: u64, packet: *Packet) !void {
     }
 }
 
-fn announcePacketIn(self: *Self, now: u64, interface: *Interface, packet: *Packet) !void {
-    if (packet.payload != .announce) {
-        return Error.InvalidAnnounce;
-    }
+fn announcePacketIn(self: *Self, interface: *Interface, announce: *Packet, now: u64) !void {
+    if (announce.payload != .announce) return Error.InvalidAnnounce;
 
     const max_hops = 128;
-    const endpoint = packet.endpoints.endpoint();
-    const hops = packet.header.hops;
-    const noise = packet.payload.announce.noise;
-    const timestamp = packet.payload.announce.timestamp;
+    const endpoint = announce.endpoints.endpoint();
+    const hops = announce.header.hops;
+    const noise = announce.payload.announce.noise;
+    const timestamp = announce.payload.announce.timestamp;
 
-    // If hash isn't in routes, apply potential ingress limiting, hold packet and return.
-    // If not one of our endpoints and packet is in transport:
-    // Get announce entry from table.
-    // If entry hops is hops - 1, increment local broadcast count and if at max then remove from table.
-    // If entry hops is hops - 2 and retries is more than 0 and retransmission timeout reached, remove from table.
-
-    if (self.endpoints.has(&endpoint) or hops >= max_hops) {
+    if (!self.routes.has(&endpoint) and self.interfaces.shouldIngressLimit(interface.id, now)) {
+        self.interfaces.holdAnnounce(interface.id, try announce.clone());
         return;
+    }
+
+    if (self.endpoints.has(&endpoint) or hops >= max_hops) return;
+
+    if (self.options.transport_enabled and announce.endpoints == .transport) {
+        if (self.announces.getPtr(&endpoint)) |entry| {
+            if (entry.hops == hops - 1) {
+                entry.rebroadcasts += 1;
+                if (entry.rebroadcasts >= 2) self.announces.remove(&endpoint);
+            } else if (entry.hops == hops - 2 and entry.retries > 0) {
+                if (now < entry.retransmit_timeout) self.announces.remove(&endpoint);
+            }
+        }
     }
 
     if (self.routes.get(endpoint)) |route| {
         if (route.has(timestamp, noise)) {
-            if (timestamp != route.latest_timestamp or route.state != .unresponsive) {
-                return;
-            }
+            if (timestamp != route.latest_timestamp or route.state != .unresponsive) return;
         }
 
         const better_route = (hops <= route.hops and timestamp > route.latest_timestamp);
         const route_expired = now >= route.expiry_time;
         const newer_route = timestamp >= route.latest_timestamp;
 
-        if (!(better_route or route_expired or newer_route)) {
-            return;
-        }
+        if (!(better_route or route_expired or newer_route)) return;
     }
 
     self.routes.setState(endpoint, .unknown);
 
-    if (self.options.transport_enabled and packet.context != .path_response) {
-        // Should be put in to announce table.
-        const announce = try packet.clone();
+    if (self.options.transport_enabled and announce.context != .path_response) {
         const retransmit_delay = self.system.rng.intRangeAtMost(u64, 0, 500_000);
         try self.announces.add(
             endpoint,
-            announce,
+            try announce.clone(),
             interface.id,
             hops,
             retransmit_delay,
@@ -366,22 +370,22 @@ fn announcePacketIn(self: *Self, now: u64, interface: *Interface, packet: *Packe
     // TODO: Check if the announce matches any discovery path requests and answer it if so.
     // TODO: Cache packet if announce.
 
-    try self.routes.updateFrom(packet, interface, now);
+    try self.routes.updateFrom(announce, interface, now);
 }
 
-fn dataPacketIn(self: *Self, now: u64, packet: *Packet) !void {
+fn dataPacketIn(self: *Self, packet: *Packet, now: u64) !void {
     _ = self;
     _ = now;
     _ = packet;
 }
 
-fn linkRequestPacketIn(self: *Self, now: u64, packet: *Packet) !void {
+fn linkRequestPacketIn(self: *Self, packet: *Packet, now: u64) !void {
     _ = self;
     _ = now;
     _ = packet;
 }
 
-fn proofPacketIn(self: *Self, now: u64, packet: *Packet) !void {
+fn proofPacketIn(self: *Self, packet: *Packet, now: u64) !void {
     _ = self;
     _ = now;
     _ = packet;
