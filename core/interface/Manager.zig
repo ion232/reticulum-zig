@@ -56,7 +56,7 @@ const Entry = struct {
         burst_penalty: u64,
         incoming_announce_times: std.fifo.LinearFifo(u64, .{ .Static = 6 }),
 
-        fn announceFrequencyIn(self: @This(), now: u64) u64 {
+        fn announceFrequencyIn(self: *const @This(), now: u64) u64 {
             const count = self.incoming_announce_times.count;
 
             if (count < 1) return 0;
@@ -110,12 +110,46 @@ pub fn getPtr(self: *Self, id: Interface.Id) ?*Interface {
     return null;
 }
 
+pub fn process(self: *Self, now: u64) !void {
+    var entries = self.entries.valueIterator();
+
+    while (entries.next()) |entry| {
+        if (self.shouldIngressLimit(entry.interface.id, now) or now <= entry.ingress_control.held_release) continue;
+
+        const lifetime = now - entry.creation_time;
+        const control = &entry.ingress_control;
+        const frequency = control.announceFrequencyIn(now);
+        const threshold = if (lifetime < control.new_time) control.burst_freq_new else control.burst_freq;
+
+        if (frequency >= threshold) continue;
+
+        var announce_entries = entry.held_announces.iterator();
+        var min_key: ?[]const u8 = null;
+        var min_hops: u8 = 255;
+
+        while (announce_entries.next()) |announce_entry| {
+            const hops = announce_entry.value_ptr.header.hops;
+
+            if (hops < min_hops) {
+                min_hops = hops;
+                min_key = announce_entry.key_ptr.*;
+            }
+        }
+
+        if (min_key) |k| {
+            control.held_release = now + 30_000_000;
+            const announce = entry.held_announces.get(k) orelse unreachable;
+            try entry.interface.incoming.push(announce);
+        }
+    }
+}
+
 pub fn shouldIngressLimit(self: *Self, id: Interface.Id, now: u64) !bool {
     const entry = self.entries.getPtr(id) orelse return Error.InterfaceNotFound;
     const lifetime = now - entry.creation_time;
     const control = &entry.ingress_control;
 
-    const frequency = entry.ingress_control.announceFrequencyIn(now);
+    const frequency = control.announceFrequencyIn(now);
     const threshold = if (lifetime < control.new_time) control.burst_freq_new else control.burst_freq;
 
     if (control.burst_active) {

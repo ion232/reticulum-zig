@@ -94,18 +94,27 @@ pub fn process(self: *Self) !void {
     self.mutex.lock();
     defer self.mutex.unlock();
 
+    const now = self.system.clock.monotonicMicros();
+
     // Active and pending links.
     // Timed out packets.
-    // Announce retransmissions.
     // Invalidated path requests.
     // Path request timeouts.
     // Reverse table timeouts.
     // Link timeouts.
     // Route timeouts.
-    // Process interface held announces.
     // Packet cache.
 
-    const now = self.system.clock.monotonicMicros();
+    const outgoing = std.ArrayList(Packet).init(self.ally);
+
+    try self.announces.process(outgoing, now);
+    try self.interfaces.process(now);
+
+    for (outgoing) |entry| {
+        const interface = self.interfaces.getPtr(entry.interface_id) orelse continue;
+        interface.outgoing.push(entry.packet);
+    }
+
     var interfaces = self.interfaces.iterator();
 
     while (interfaces.next()) |entry| {
@@ -303,12 +312,13 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
         }
 
         if (should_transmit) {
-            // Add the packet hash to the filter, but make sure to only do it once.
-            // Transmit the packet.
+            self.packet_filter.add(packet);
+            interface.outgoing.push(packet);
+            transmitted = true;
         }
     }
 
-    return true;
+    return transmitted;
 }
 
 fn transport(self: *Self, now: u64, packet: *Packet) !void {
@@ -463,6 +473,8 @@ pub fn deinit(self: *Self) void {
 
     self.endpoints.deinit();
     self.interfaces.deinit();
+    self.ratchets.deinit();
     self.routes.deinit();
+    self.announces.deinit();
     self.packet_filter.deinit();
 }
