@@ -26,7 +26,7 @@ pub const AnnounceEntry = struct {
 pub const EgressControl = struct {
     pub const max_queued_announces = if (builtin.target.os.tag == .freestanding) 32 else 16384;
 
-    const AnnounceQueue = std.PriorityQueue(AnnounceEntry, compareAnnounces);
+    const AnnounceQueue = std.PriorityQueue(AnnounceEntry, void, compareAnnounces);
 
     announce_queue: AnnounceQueue,
     announce_release_time: u64,
@@ -36,7 +36,7 @@ pub const EgressControl = struct {
 const Entry = struct {
     const PendingEvent = struct {
         event: Event.Out,
-        origin_id: Interface.Id,
+        origin_id: ?Interface.Id,
     };
 
     const Metrics = struct {
@@ -46,6 +46,8 @@ const Entry = struct {
     };
 
     const IngressControl = struct {
+        const IncomingAnnounceTimes = std.fifo.LinearFifo(u64, .{ .Static = 6 });
+
         held_release: u64,
         new_time: u64,
         burst_active: bool,
@@ -54,7 +56,7 @@ const Entry = struct {
         burst_hold: u64,
         burst_activated: u64,
         burst_penalty: u64,
-        incoming_announce_times: std.fifo.LinearFifo(u64, .{ .Static = 6 }),
+        incoming_announce_times: IncomingAnnounceTimes,
 
         fn announceFrequencyIn(self: *const @This(), now: u64) u64 {
             const count = self.incoming_announce_times.count;
@@ -67,7 +69,7 @@ const Entry = struct {
                 sum += self.incoming_announce_times.peekItem(i) - self.incoming_announce_times.peekItem(i - 1);
             }
 
-            const average = if (sum != 0) (1_000_000 * count) / sum else 0;
+            const average = if (sum != 0) count / sum else 0;
 
             return average;
         }
@@ -114,7 +116,7 @@ pub fn process(self: *Self, now: u64) !void {
     var entries = self.entries.valueIterator();
 
     while (entries.next()) |entry| {
-        if (self.shouldIngressLimit(entry.interface.id, now) or now <= entry.ingress_control.held_release) continue;
+        if (try self.shouldIngressLimit(entry.interface.id, now) or now <= entry.ingress_control.held_release) continue;
 
         const lifetime = now - entry.creation_time;
         const control = &entry.ingress_control;
@@ -139,7 +141,9 @@ pub fn process(self: *Self, now: u64) !void {
         if (min_key) |k| {
             control.held_release = now + 30_000_000;
             const announce = entry.held_announces.get(k) orelse unreachable;
-            try entry.interface.incoming.push(announce);
+            try entry.interface.incoming.push(.{
+                .packet = announce,
+            });
         }
     }
 }
@@ -198,7 +202,7 @@ pub fn updateMetrics(
     }
 }
 
-pub fn add(self: *Self, config: Interface.Config) Error!Interface.Api {
+pub fn add(self: *Self, config: Interface.Config, now: u64) Error!Interface.Api {
     if (self.entries.count() >= interface_limit) return Error.TooManyInterfaces;
 
     const id = self.current_interface_id;
@@ -235,7 +239,30 @@ pub fn add(self: *Self, config: Interface.Config) Error!Interface.Api {
 
     try self.entries.put(id, Entry{
         .interface = interface,
-        .pending = Entry.Pending.init(self.ally),
+        .pending = Pending.init(self.ally),
+        .metrics = .{
+            .bytes_in = 0,
+            .bytes_out = 0,
+            .last_seen = now,
+        },
+        .egress_control = .{
+            .announce_capacity = 2,
+            .announce_release_time = now,
+            .announce_queue = .init(self.ally, {}),
+        },
+        .ingress_control = .{
+            .burst_activated = 0,
+            .burst_active = false,
+            .burst_freq = 12 * 1_000_000,
+            .burst_freq_new = 4 * 1_000_000,
+            .burst_hold = 60 * 1_000_000,
+            .burst_penalty = 5 * 60 * 1_000_000,
+            .held_release = 0,
+            .new_time = 2 * 60 * 60 * 1_000_000,
+            .incoming_announce_times = Entry.IngressControl.IncomingAnnounceTimes.init(),
+        },
+        .held_announces = .init(self.ally),
+        .creation_time = now,
     });
 
     return interface.api();
@@ -281,15 +308,15 @@ pub fn deinit(self: *Self) void {
     var entries = self.entries.valueIterator();
 
     while (entries.next()) |entry| {
-        while (entry.pending.pop()) |event| {
-            var e = event;
-            e.deinit();
+        while (entry.pending.readItem()) |e| {
+            var event = e.event;
+            event.deinit();
         }
 
         var held_announces = entry.held_announces.iterator();
 
         while (held_announces.next()) |announce| {
-            self.ally.free(announce.key_ptr);
+            self.ally.free(announce.key_ptr.*);
             announce.value_ptr.deinit();
         }
 
@@ -303,8 +330,8 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-fn compareAnnounces(ctx: void, a: Packet, b: Packet) std.math.Order {
+fn compareAnnounces(ctx: void, a: AnnounceEntry, b: AnnounceEntry) std.math.Order {
     _ = ctx;
 
-    return std.math.order(a.header.hops, b.header.hops);
+    return std.math.order(a.announce.header.hops, b.announce.header.hops);
 }

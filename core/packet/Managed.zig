@@ -47,7 +47,7 @@ pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
 
 pub fn validate(self: *const Self) !void {
     if (self.header.purpose == .announce and self.header.endpoint != .single) {
-        return ValidationError.InvalidAnnouncePacket;
+        return ValidationError.InvalidAnnounce;
     }
 
     switch (self.payload) {

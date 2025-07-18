@@ -183,6 +183,10 @@ pub const Out = union(enum) {
                 try f.indent();
                 try f.print("}}", .{});
             },
+            .task => |task| {
+                _ = task;
+                try f.print("", .{});
+            },
         }
     }
 };

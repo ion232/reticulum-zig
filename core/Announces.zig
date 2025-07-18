@@ -12,7 +12,7 @@ const Self = @This();
 
 pub const PacketOut = struct {
     packet: Packet,
-    interface: Interface.Id,
+    interface_id: Interface.Id,
 };
 
 const Entry = struct {
@@ -41,7 +41,7 @@ pub fn init(ally: Allocator) Self {
     };
 }
 
-pub fn process(self: *Self, outgoing: *std.ArrayList(Packet), now: u64) !void {
+pub fn process(self: *Self, outgoing: *std.ArrayList(PacketOut), now: u64) !void {
     if (now <= self.last_checked + 1_000_000) return;
 
     var to_remove = std.ArrayList([]const u8).init(self.ally);
@@ -59,7 +59,10 @@ pub fn process(self: *Self, outgoing: *std.ArrayList(Packet), now: u64) !void {
             }
 
             entry.packet.header.hops = entry.hops;
-            try outgoing.append(entry.packet);
+            try outgoing.append(.{
+                .interface_id = entry.interface_id,
+                .packet = entry.packet,
+            });
         }
     }
 
@@ -106,7 +109,7 @@ pub fn getPtr(self: *Self, endpoint: Hash.Short) ?*Entry {
     return self.entries.getPtr(&endpoint);
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     var entries = self.entries.iterator();
 
     while (entries.next()) |entry| {

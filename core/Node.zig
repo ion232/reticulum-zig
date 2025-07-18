@@ -73,7 +73,8 @@ pub fn addInterface(self: *Self, config: Interface.Config) Error!Interface.Api {
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    return try self.interfaces.add(config);
+    const now = self.system.clock.monotonicMicros();
+    return try self.interfaces.add(config, now);
 }
 
 pub fn removeInterface(self: *Self, id: Interface.Id) void {
@@ -105,14 +106,16 @@ pub fn process(self: *Self) !void {
     // Route timeouts.
     // Packet cache.
 
-    const outgoing = std.ArrayList(Packet).init(self.ally);
+    var outgoing = std.ArrayList(Announces.PacketOut).init(self.ally);
 
-    try self.announces.process(outgoing, now);
+    try self.announces.process(&outgoing, now);
     try self.interfaces.process(now);
 
-    for (outgoing) |entry| {
+    for (outgoing.items) |entry| {
         const interface = self.interfaces.getPtr(entry.interface_id) orelse continue;
-        interface.outgoing.push(entry.packet);
+        try interface.outgoing.push(.{
+            .packet = entry.packet,
+        });
     }
 
     var interfaces = self.interfaces.iterator();
@@ -134,27 +137,37 @@ fn eventsIn(self: *Self, interface: *Interface, now: u64) !void {
         defer event.deinit();
 
         try switch (event) {
-            .announce => |*announce| self.announceTask(interface, announce, now),
+            .task => |*task| switch (task.*) {
+                .announce => |*announce| self.announceTask(interface, announce, now),
+                .plain => |*plain| self.plainTask(interface, plain),
+            },
             .packet => |*packet| self.packetIn(interface, packet, now),
-            .plain => |*plain| self.plainTask(interface, plain),
         };
     }
 }
 
 fn eventsOut(self: *Self, interface: *Interface, pending: *Interfaces.Pending, egress_control: *Interfaces.EgressControl, now: u64) !void {
-    while (pending.pop()) |entry| {
+    while (pending.readItem()) |entry| {
         var event = entry.event;
         const origin_interface = if (entry.origin_id) |id| self.interfaces.getPtr(id) else null;
 
-        const not_sent = switch (event) {
-            .packet => |*packet| self.packetOut(
+        var not_sent = true;
+
+        switch (event) {
+            .packet => |*packet| not_sent = try self.packetOut(
                 interface,
                 origin_interface,
                 egress_control,
                 packet,
                 now,
             ),
-        } catch true;
+            .task => |task| {
+                try interface.outgoing.push(.{
+                    .task = task,
+                });
+                not_sent = false;
+            },
+        }
 
         if (not_sent) {
             event.deinit();
@@ -162,7 +175,7 @@ fn eventsOut(self: *Self, interface: *Interface, pending: *Interfaces.Pending, e
     }
 }
 
-fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Announce, now: u64) !void {
+fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Task.Announce, now: u64) !void {
     const endpoint = self.endpoints.get(announce.hash.short()) orelse return;
     const app_data: ?[]const u8 = blk: {
         if (announce.app_data) |app_data| {
@@ -194,7 +207,7 @@ fn packetIn(self: *Self, interface: *Interface, packet: *Packet, now: u64) !void
 
     packet.header.hops += 1;
 
-    try self.transport(now, packet);
+    try self.transport(interface.id, packet, now);
 
     try switch (header.purpose) {
         .announce => self.announcePacketIn(interface, packet, now),
@@ -204,7 +217,7 @@ fn packetIn(self: *Self, interface: *Interface, packet: *Packet, now: u64) !void
     };
 }
 
-fn plainTask(self: *Self, interface: *Interface, plain: *Event.In.Plain) !void {
+fn plainTask(self: *Self, interface: *Interface, plain: *Event.In.Task.Plain) !void {
     const packet = try interface.packet_factory.makePlain(plain.name, plain.payload);
     try self.interfaces.broadcast(packet, null);
 }
@@ -243,18 +256,18 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
 
         if (purpose == .announce and origin_interface == null) {
             should_transmit = blk: {
-                const route = self.routes.get(&endpoint) orelse break :blk false;
+                const route = self.routes.get(endpoint) orelse break :blk false;
                 const next_hop_interface = self.interfaces.getPtr(route.origin_interface_id) orelse break :blk false;
 
                 switch (interface.mode) {
                     .access_point => break :blk false,
-                    .roaming => if (!self.endpoints.has(endpoint)) {
+                    .roaming => if (!self.endpoints.has(&endpoint)) {
                         break :blk switch (next_hop_interface.mode) {
                             .roaming, .boundary => false,
                             else => true,
                         };
                     },
-                    .boundary => if (!self.endpoints.has(endpoint)) {
+                    .boundary => if (!self.endpoints.has(&endpoint)) {
                         break :blk switch (next_hop_interface.mode) {
                             .roaming => false,
                             else => true,
@@ -263,17 +276,17 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
                     else => if (hops > 0) {
                         if (egress_control.announce_queue.count() == 0 and now >= egress_control.announce_release_time and interface.bit_rate != null) {
                             const bit_rate = interface.bit_rate orelse unreachable;
-                            const transmission_time = packet.size() / bit_rate;
+                            const transmission_time = (8 * packet.size()) / bit_rate.bitsPerSecond();
                             egress_control.announce_release_time = now + (transmission_time / egress_control.announce_capacity);
                         } else {
                             should_transmit = false;
 
                             if (egress_control.announce_queue.count() >= Interfaces.EgressControl.max_queued_announces) {
                                 var announce_entries = egress_control.announce_queue.iterator();
-                                var matching_entry: ?*Interfaces.AnnounceEntry = null;
+                                var matching_entry: ?Interfaces.AnnounceEntry = null;
 
-                                while (announce_entries.next()) |*entry| {
-                                    if (std.mem.eql(u8, entry.announce.packet.endpoints.endpoint(), packet.endpoints.endpoint())) {
+                                while (announce_entries.next()) |entry| {
+                                    if (std.mem.eql(u8, &entry.announce.endpoints.endpoint(), &packet.endpoints.endpoint())) {
                                         matching_entry = entry;
                                         break;
                                     }
@@ -281,15 +294,18 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
 
                                 if (matching_entry) |entry| {
                                     if (packet.payload.announce.timestamp > entry.announce.payload.announce.timestamp) {
-                                        entry.* = .{
-                                            .announce = try packet.clone(),
-                                            .timestamp = now,
-                                        };
+                                        try egress_control.announce_queue.update(
+                                            entry,
+                                            .{
+                                                .announce = try packet.clone(),
+                                                .timestamp = now,
+                                            },
+                                        );
                                     }
                                 } else {
                                     try egress_control.announce_queue.add(.{
+                                        .announce = try packet.clone(),
                                         .timestamp = now,
-                                        .packet = try packet.clone(),
                                     });
 
                                     if (egress_control.announce_queue.count() == 0 and egress_control.announce_release_time > now) {
@@ -313,7 +329,9 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
 
         if (should_transmit) {
             self.packet_filter.add(packet);
-            interface.outgoing.push(packet);
+            try interface.outgoing.push(.{
+                .packet = try packet.clone(),
+            });
             transmitted = true;
         }
     }
@@ -321,7 +339,7 @@ fn packetOut(self: *Self, interface: *Interface, origin_interface: ?*Interface, 
     return transmitted;
 }
 
-fn transport(self: *Self, now: u64, packet: *Packet) !void {
+fn transport(self: *Self, interface_id: Interface.Id, packet: *Packet, now: u64) !void {
     if (!self.options.transport_enabled) {
         return;
     }
@@ -355,7 +373,7 @@ fn transport(self: *Self, now: u64, packet: *Packet) !void {
             }
 
             self.routes.setLastSeen(endpoint, now);
-            try self.interfaces.transmit(packet, route.origin_interface_id);
+            try self.interfaces.transmit(packet, interface_id, route.origin_interface_id);
         }
     }
 
@@ -375,20 +393,20 @@ fn announcePacketIn(self: *Self, interface: *Interface, announce: *Packet, now: 
     const noise = announce.payload.announce.noise;
     const timestamp = announce.payload.announce.timestamp;
 
-    if (!self.routes.has(&endpoint) and self.interfaces.shouldIngressLimit(interface.id, now)) {
-        self.interfaces.holdAnnounce(interface.id, try announce.clone());
+    if (!self.routes.has(endpoint) and try self.interfaces.shouldIngressLimit(interface.id, now)) {
+        try self.interfaces.holdAnnounce(interface.id, try announce.clone());
         return;
     }
 
     if (self.endpoints.has(&endpoint) or hops >= max_hops) return;
 
     if (self.options.transport_enabled and announce.endpoints == .transport) {
-        if (self.announces.getPtr(&endpoint)) |entry| {
+        if (self.announces.getPtr(endpoint)) |entry| {
             if (entry.hops == hops - 1) {
                 entry.rebroadcasts += 1;
-                if (entry.rebroadcasts >= 2) self.announces.remove(&endpoint);
+                if (entry.rebroadcasts >= 2) self.announces.remove(endpoint);
             } else if (entry.hops == hops - 2 and entry.retries > 0) {
-                if (now < entry.retransmit_timeout) self.announces.remove(&endpoint);
+                if (now < entry.retransmit_timeout) self.announces.remove(endpoint);
             }
         }
     }
@@ -443,7 +461,7 @@ fn proofPacketIn(self: *Self, packet: *Packet, now: u64) !void {
     _ = packet;
 }
 
-fn shouldDrop(self: *Self, packet: *const Packet) !bool {
+fn shouldDrop(self: *Self, packet: *const Packet) bool {
     const endpoint = packet.header.endpoint;
     const purpose = packet.header.purpose;
     const hops = packet.header.hops;

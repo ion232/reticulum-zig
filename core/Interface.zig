@@ -87,18 +87,22 @@ pub fn init(
 
 pub fn announce(ptr: *anyopaque, hash: Hash, app_data: ?data.Bytes) Error!void {
     try deliverEvent(ptr, Event.In{
-        .announce = .{
-            .hash = hash,
-            .app_data = app_data,
+        .task = .{
+            .announce = .{
+                .hash = hash,
+                .app_data = app_data,
+            },
         },
     });
 }
 
 pub fn plain(ptr: *anyopaque, name: Name, payload: Payload) Error!void {
     try deliverEvent(ptr, Event.In{
-        .plain = .{
-            .name = name,
-            .payload = payload,
+        .task = .{
+            .plain = .{
+                .name = name,
+                .payload = payload,
+            },
         },
     });
 }

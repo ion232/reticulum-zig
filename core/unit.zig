@@ -9,6 +9,16 @@ pub const BitRate = struct {
 
     bits: Bits,
     rate: Rate,
+
+    pub fn bitsPerSecond(self: @This()) usize {
+        const factor: usize = switch (self.bits.prefix) {
+            .none => 1,
+            .kilo => 1_000,
+            .mega => 1_000_000,
+        };
+
+        return factor * self.bits.count;
+    }
 };
 
 pub const Bits = struct {
