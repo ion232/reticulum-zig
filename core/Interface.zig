@@ -54,7 +54,7 @@ const Self = @This();
 
 // TODO: Account for interfaces that only receive packets and don't transmit.
 // TODO: Find a less error prone way to define the API.
-// TODO: Rethink and refactor the event API.
+// TODO: Rethink and refactor the event API. Most likely have an interface level API and a node level API.
 
 ally: Allocator,
 id: Id,

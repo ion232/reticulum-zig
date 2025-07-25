@@ -104,16 +104,14 @@ pub fn process(self: *Self) !void {
     // Reverse table timeouts.
     // Link timeouts.
     // Route timeouts.
-    // Packet cache.
 
-    var outgoing = std.ArrayList(Announces.PacketOut).init(self.ally);
+    var outgoing = std.ArrayList(Packet).init(self.ally);
 
     try self.announces.process(&outgoing, now);
     try self.interfaces.process(now);
 
     for (outgoing.items) |entry| {
-        const interface = self.interfaces.getPtr(entry.interface_id) orelse continue;
-        try interface.outgoing.push(.{
+        try entry.pending.push(.{
             .packet = entry.packet,
         });
     }
@@ -186,6 +184,8 @@ fn announceTask(self: *Self, interface: *Interface, announce: *Event.In.Task.Ann
     };
 
     var packet = try interface.packet_factory.makeAnnounce(endpoint, app_data, now);
+    packet.header.hops = 1;
+
     defer packet.deinit();
 
     try self.interfaces.broadcast(packet, null);
@@ -438,7 +438,6 @@ fn announcePacketIn(self: *Self, interface: *Interface, announce: *Packet, now: 
     }
 
     // TODO: Check if the announce matches any discovery path requests and answer it if so.
-    // TODO: Cache packet if announce.
 
     try self.routes.updateFrom(announce, interface, now);
 }

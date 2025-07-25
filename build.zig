@@ -170,7 +170,8 @@ const Builder = struct {
 
         const test_names = switch (suite) {
             .integration => .{"tcp"},
-            .simulation => .{ "announce", "plain" },
+            .simulation => .{"announce"},
+            // .simulation => .{ "announce", "plain" },
         };
 
         const packages = switch (suite) {

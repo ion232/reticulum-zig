@@ -110,5 +110,6 @@ pub fn build(self: *Self) !Managed {
         .endpoints = endpoints,
         .context = self.context,
         .payload = self.payload,
+        .interface_id = null,
     };
 }

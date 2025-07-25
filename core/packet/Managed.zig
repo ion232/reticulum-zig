@@ -5,6 +5,7 @@ const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
 const Header = packet.Header;
+const Interface = @import("../Interface.zig");
 const Context = packet.Context;
 const Endpoints = packet.Endpoints;
 const Payload = packet.Payload;
@@ -23,6 +24,7 @@ interface_access_code: data.Bytes,
 endpoints: Endpoints,
 context: Context,
 payload: Payload,
+interface_id: ?Interface.Id,
 
 pub fn init(ally: Allocator) Self {
     return Self{
@@ -32,6 +34,7 @@ pub fn init(ally: Allocator) Self {
         .endpoints = undefined,
         .context = undefined,
         .payload = .none,
+        .interface_id = null,
     };
 }
 

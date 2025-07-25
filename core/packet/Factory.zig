@@ -177,6 +177,7 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
         .header = header,
         .interface_access_code = interface_access_code,
         .payload = payload,
+        .interface_id = null,
     };
 }
 

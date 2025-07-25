@@ -32,9 +32,9 @@ test "abc" {
 
     const app_data = try core.data.makeBytes("here is some app data", ally);
     try a0.api.announce(a.node.mainEndpoint(), app_data);
-    try s.stepAfter(10, .microseconds, &manual_clock);
-    try s.stepAfter(2, .seconds, &manual_clock);
-    try s.stepAfter(2, .seconds, &manual_clock);
+    try s.stepAfter(1, .seconds, &manual_clock);
+    try t.expect(a0.event_buffer.items.len == 0);
+    try s.stepAfter(1, .seconds, &manual_clock);
     try t.expect(a0.event_buffer.items.len == 1);
 
     inline for (&.{ b0, b1, c0 }) |n| {

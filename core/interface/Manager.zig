@@ -294,7 +294,6 @@ pub fn broadcast(self: *Self, packet: Packet, origin_id: ?Interface.Id) !void {
         if (origin_id) |id| {
             if (entry.interface.id == id) continue;
         }
-
         try entry.pending.writeItem(.{
             .event = .{
                 .packet = try packet.clone(),

@@ -211,10 +211,7 @@ test "validate-raw-announce-roundtrip" {
     }
 
     var factory = Factory.init(ally, rng, .{});
-    var p = factory.fromBytes(bytes.items) catch |err| {
-        std.debug.print("Failed to parse packet: {}\n", .{err});
-        return;
-    };
+    var p = try factory.fromBytes(bytes.items);
     defer p.deinit();
 
     try t.expect(p.header.purpose == .announce);
@@ -225,10 +222,7 @@ test "validate-raw-announce-roundtrip" {
 
     var buffer: [1024]u8 = undefined;
 
-    var q = factory.fromBytes(try p.write(&buffer)) catch |err| {
-        std.debug.print("Failed to parse packet: {}\n", .{err});
-        return;
-    };
+    var q = try factory.fromBytes(try p.write(&buffer));
     defer q.deinit();
 
     try t.expect(q.header.purpose == .announce);
