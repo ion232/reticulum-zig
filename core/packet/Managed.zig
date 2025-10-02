@@ -43,25 +43,25 @@ pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
 pub fn validate(self: *const Self) !void {
     switch (self.payload) {
         .announce => |a| {
-            var signed_data = std.ArrayList(u8).init(self.ally);
-            defer signed_data.deinit();
+            var signed_data = std.ArrayList(u8).empty;
+            defer signed_data.deinit(self.ally);
 
             const endpoint_hash = self.endpoints.endpoint();
-            try signed_data.appendSlice(endpoint_hash[0..]);
-            try signed_data.appendSlice(a.public.dh[0..]);
-            try signed_data.appendSlice(a.public.signature.bytes[0..]);
-            try signed_data.appendSlice(a.name_hash[0..]);
-            try signed_data.appendSlice(a.noise[0..]);
+            try signed_data.appendSlice(self.ally, endpoint_hash[0..]);
+            try signed_data.appendSlice(self.ally, a.public.dh[0..]);
+            try signed_data.appendSlice(self.ally, a.public.signature.bytes[0..]);
+            try signed_data.appendSlice(self.ally, a.name_hash[0..]);
+            try signed_data.appendSlice(self.ally, a.noise[0..]);
 
             var timestamp_bytes: [5]u8 = undefined;
             std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
-            try signed_data.appendSlice(&timestamp_bytes);
+            try signed_data.appendSlice(self.ally, &timestamp_bytes);
 
             if (a.ratchet) |*ratchet| {
-                try signed_data.appendSlice(ratchet[0..]);
+                try signed_data.appendSlice(self.ally, ratchet[0..]);
             }
 
-            try signed_data.appendSlice(a.application_data.items);
+            try signed_data.appendSlice(self.ally, a.application_data.items);
 
             var verifier = try a.signature.verifier(a.public.signature);
             verifier.update(signed_data.items);
@@ -218,12 +218,12 @@ pub fn clone(self: *const Self) !Self {
         .context = self.context,
         .endpoints = self.endpoints,
         .header = self.header,
-        .interface_access_code = try self.interface_access_code.clone(),
-        .payload = try self.payload.clone(),
+        .interface_access_code = try self.interface_access_code.clone(self.ally),
+        .payload = try self.payload.clone(self.ally),
     };
 }
 
 pub fn deinit(self: *Self) void {
-    self.interface_access_code.deinit();
-    self.payload.deinit();
+    self.interface_access_code.deinit(self.ally);
+    self.payload.deinit(self.ally);
 }

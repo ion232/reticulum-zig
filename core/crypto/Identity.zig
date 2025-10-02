@@ -97,29 +97,27 @@ fn makeHash(public: Public) Hash {
 const t = std.testing;
 
 test "valid-signature" {
-    const allocator = t.allocator;
     var rng = std.crypto.random;
     const identity = try Self.random(&rng);
 
-    var message = try data.Bytes.initCapacity(allocator, 0);
-    defer message.deinit();
+    var message = try data.Bytes.initCapacity(t.allocator, 0);
+    defer message.deinit(t.allocator);
 
-    try message.appendSlice("this is a message");
+    try message.appendSlice(t.allocator, "this is a message");
     const signature = try identity.sign(message);
 
     try signature.verify(message.items, identity.public.signature);
 }
 
 test "invalid-signature" {
-    const allocator = t.allocator;
     var rng = std.crypto.random;
     const identity1 = try Self.random(&rng);
     const identity2 = try Self.random(&rng);
 
-    var message = try data.Bytes.initCapacity(allocator, 0);
-    defer message.deinit();
+    var message = try data.Bytes.initCapacity(t.allocator, 0);
+    defer message.deinit(t.allocator);
 
-    try message.appendSlice("this is a message");
+    try message.appendSlice(t.allocator, "this is a message");
     const signature = try identity1.sign(message);
 
     try t.expectError(

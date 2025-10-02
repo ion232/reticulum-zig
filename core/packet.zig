@@ -50,7 +50,7 @@ pub const Payload = union(enum) {
         };
     }
 
-    pub fn clone(self: Self) !Self {
+    pub fn clone(self: Self, ally: Allocator) !Self {
         return switch (self) {
             .announce => |a| Self{
                 .announce = Announce{
@@ -60,11 +60,11 @@ pub const Payload = union(enum) {
                     .timestamp = a.timestamp,
                     .ratchet = a.ratchet,
                     .signature = a.signature,
-                    .application_data = try a.application_data.clone(),
+                    .application_data = try a.application_data.clone(ally),
                 },
             },
             .raw => |r| Self{
-                .raw = try r.clone(),
+                .raw = try r.clone(ally),
             },
             .none => Self.none,
         };
@@ -89,10 +89,10 @@ pub const Payload = union(enum) {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Self, ally: Allocator) void {
         return switch (self.*) {
-            .announce => |*announce| announce.application_data.deinit(),
-            .raw => |*raw| raw.deinit(),
+            .announce => |*announce| announce.application_data.deinit(ally),
+            .raw => |*raw| raw.deinit(ally),
             .none => {},
         };
     }
@@ -201,13 +201,13 @@ test "validate-raw-announce-roundtrip" {
     // Captured from reference implementation - with framing removed.
     const raw_announce = "71008133c7ce6d6be9b4070a3b98ee9ecab583dfe79d30200ee5e9f5c5615d45a5b000fb266456840e5f4d010a6fbb4025969f8db5415597e3d7a48431d0534e441d0bdeb78f1064f50b447291dd51617040dc9c40cb5b9adab1314ad270b1297d6fd46ec60bc318e2c0f0d908fc1c2bcdef00686f9b4ef17ec1b73f60b14df6709cb74164bd1890e26ff8a4634bbd855051ef959f413d7f7c8f9ff0f54ee81fb994c4e1975fe6f4b56fb26d2e107bd824d864a6932a2e2c02b1352ad9a31ce1cbeae72902effef1ccdeb7d004fbe527cd39111dc59d0e92c406696f6e323332c0";
 
-    var bytes = std.ArrayList(u8).init(ally);
-    defer bytes.deinit();
+    var bytes = std.ArrayList(u8).empty;
+    defer bytes.deinit(ally);
 
     var i: usize = 0;
     while (i < raw_announce.len) : (i += 2) {
         const byte = std.fmt.parseInt(u8, raw_announce[i .. i + 2], 16) catch break;
-        try bytes.append(byte);
+        try bytes.append(ally, byte);
     }
 
     var factory = Factory.init(ally, rng, .{});
@@ -262,7 +262,7 @@ test "validate-make-announce" {
 
     var raw_bytes = try data.Bytes.initCapacity(ally, announce_packet.size());
     raw_bytes.expandToCapacity();
-    defer raw_bytes.deinit();
+    defer raw_bytes.deinit(ally);
     const raw_packet = try announce_packet.write(raw_bytes.items);
 
     var p = try factory.fromBytes(raw_packet);
