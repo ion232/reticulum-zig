@@ -55,7 +55,7 @@ pub fn deinit(self: *Self) void {
             event.deinit();
         }
 
-        interface.event_buffer.deinit();
+        interface.event_buffer.deinit(self.ally);
     }
 
     self.nodes.deinit();
@@ -103,7 +103,7 @@ pub fn fromTopology(comptime topology: anytype, system: *core.System, ally: Allo
                 .api = try simulator_node.node.addInterface(interface_config),
                 .config = interface_config,
                 .to = @tagName(interface.to),
-                .event_buffer = std.ArrayList(core.Node.Event.Out).init(self.ally),
+                .event_buffer = std.ArrayList(core.Node.Event.Out).empty,
             };
 
             try simulator_node.interfaces.put(interface_field.name, {});
@@ -204,7 +204,7 @@ pub fn processNodes(self: *Self) !void {
             var interface = self.interfaces.getPtr(interface_name.*).?;
 
             while (interface.api.collectEvent()) |event_out| {
-                try interface.event_buffer.append(event_out);
+                try interface.event_buffer.append(self.ally, event_out);
             }
         }
     }
