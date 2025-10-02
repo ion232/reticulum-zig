@@ -1,7 +1,7 @@
 .{
     .name = .reticulum,
-    .version = "0.2.0",
-    .minimum_zig_version = "0.14.1",
+    .version = "0.3.0",
+    .minimum_zig_version = "0.15.1",
     .fingerprint = 0x357e04a91bafe743,
     .paths = .{
         "build.zig",
@@ -14,8 +14,8 @@
     },
     .dependencies = .{
         .ohsnap = .{
-            .url = "git+https://github.com/mnemnion/ohsnap#a140626e388ad3aea2a6a678183f5c0c03887fde",
-            .hash = "ohsnap-0.3.1-iWxzyu6bAADX1OdmK7FFg94X6RDfDvbt0iwQFH8mSFJE",
+            .url = "https://github.com/mnemnion/ohsnap/archive/refs/heads/trunk.tar.gz",
+            .hash = "ohsnap-0.4.1-iWxzyhicAAA90MEnwxA22VshYmsSH3t0dcqM9yib7ose",
         },
     },
 }

@@ -59,7 +59,7 @@ const Builder = struct {
 
         const write_files = self.b.addWriteFiles();
         const bindings = @import("core/bindings.zig");
-        const data = bindings.data(.c, self.b.allocator) catch |err| {
+        const data = bindings.data(self.b.allocator, .c) catch |err| {
             std.debug.print("Failed to generate header: {any}", .{err});
             std.process.exit(1);
         };
@@ -75,13 +75,21 @@ const Builder = struct {
 
     pub fn examples(self: *Self) void {
         const step = self.b.step("example", "Run an example");
-
         const name = self.b.option([]const u8, "name", "The module name to run") orelse return;
+        const example_name = self.b.fmt("example-{s}", .{name});
+
+        const example_module = self.b.addModule(
+            example_name,
+            .{
+                .root_source_file = self.b.path(self.b.fmt("examples/{s}.zig", .{name})),
+                .target = self.target,
+                .optimize = self.optimize,
+            },
+        );
+
         const example = self.b.addExecutable(.{
-            .name = self.b.fmt("example-{s}", .{name}),
-            .root_source_file = self.b.path(self.b.fmt("examples/{s}.zig", .{name})),
-            .target = self.target,
-            .optimize = self.optimize,
+            .name = example_name,
+            .root_module = example_module,
         });
 
         self.addImport(example, .core);
@@ -154,11 +162,18 @@ const Builder = struct {
 
         inline for (.{ .app, .core, .io }) |t| {
             const root = if (t == .app) "main" else "lib";
+            const test_module = self.b.addModule(
+                @tagName(t),
+                .{
+                    .root_source_file = self.b.path(@tagName(t) ++ "/" ++ root ++ ".zig"),
+                    .target = self.target,
+                    .optimize = self.optimize,
+                },
+            );
+
             const compile = self.b.addTest(.{
                 .name = @tagName(t),
-                .root_source_file = self.b.path(@tagName(t) ++ "/" ++ root ++ ".zig"),
-                .target = self.target,
-                .optimize = self.optimize,
+                .root_module = test_module,
             });
 
             step.dependOn(&self.b.addRunArtifact(compile).step);
@@ -195,11 +210,18 @@ const Builder = struct {
         };
 
         inline for (test_names) |name| {
+            const test_module = self.b.addModule(
+                name,
+                .{
+                    .root_source_file = self.b.path(root_directory ++ "/" ++ name ++ ".zig"),
+                    .target = self.target,
+                    .optimize = self.optimize,
+                },
+            );
+
             const t = self.b.addTest(.{
                 .name = name,
-                .root_source_file = self.b.path(root_directory ++ "/" ++ name ++ ".zig"),
-                .target = self.target,
-                .optimize = self.optimize,
+                .root_module = test_module,
             });
 
             inline for (packages) |package| {
