@@ -14,9 +14,10 @@ running: bool,
 node: *core.Node,
 host: []const u8,
 port: u16,
-stream: ?std.net.Stream,
-reader: ?hdlc.Reader(std.net.Stream.Reader, mtu),
-writer: ?hdlc.Writer(std.net.Stream.Writer),
+stream_reader: ?std.net.Stream.Reader,
+stream_writer: ?std.net.Stream.Writer,
+hdlc_reader: ?hdlc.Reader,
+hdlc_writer: ?hdlc.Writer,
 
 pub fn init(node: *core.Node, host: []const u8, port: u16, ally: Allocator) !Self {
     return .{
@@ -25,9 +26,10 @@ pub fn init(node: *core.Node, host: []const u8, port: u16, ally: Allocator) !Sel
         .node = node,
         .host = try ally.dupe(u8, host),
         .port = port,
-        .stream = null,
-        .reader = null,
-        .writer = null,
+        .stream_reader = null,
+        .stream_writer = null,
+        .hdlc_reader = null,
+        .hdlc_writer = null,
     };
 }
 
@@ -35,13 +37,12 @@ pub fn deinit(self: *Self) void {
     self.running = false;
     self.ally.destroy(&self.host);
 
-    if (self.stream) |stream| {
-        stream.close();
-        self.stream = null;
+    if (self.hdlc_reader) |r| {
+        self.ally.free(r.reader.buffer);
     }
 
-    if (self.reader) |*reader| {
-        reader.deinit();
+    if (self.hdlc_writer) |w| {
+        self.ally.free(w.writer.buffer);
     }
 }
 
@@ -49,17 +50,21 @@ pub fn run(self: *Self) !void {
     try self.connect();
     self.running = true;
 
-    var reader = self.reader orelse return error.NoReader;
-    var frames: [1024][]const u8 = undefined;
+    var hdlc_reader = self.hdlc_reader orelse return error.NoReader;
+    // TODO: Replace with 2 * packet mtu.
+    var frame: [1024]u8 = @splat(0);
 
     while (self.running) {
-        const n = reader.readFrames(&frames) catch |err| {
-            if (err == error.EndOfStream) continue else return err;
+        const n = hdlc_reader.readFrame(&frame) catch |err| {
+            switch (err) {
+                error.EndOfStream => continue,
+                else => return err,
+            }
         };
 
-        for (frames[0..n]) |frame| {
-            try self.handleFrame(frame);
-        }
+        if (n == 0) continue;
+
+        try self.handleFrame(frame[0..n]);
     }
 }
 
@@ -67,36 +72,32 @@ fn connect(self: *Self) !void {
     const address_list = try std.net.getAddressList(self.ally, self.host, self.port);
     defer address_list.deinit();
 
-    if (address_list.addrs.len == 0) {
-        return error.FailedHostLookup;
-    }
+    if (address_list.addrs.len == 0) return error.FailedHostLookup;
 
     const address = address_list.addrs[0];
-    self.stream = try std.net.tcpConnectToAddress(address);
-    self.reader = try hdlc.Reader(std.net.Stream.Reader, mtu).init(
-        self.stream.?.reader(),
-        self.ally,
-    );
-    self.writer = hdlc.Writer(std.net.Stream.Writer).init(
-        self.stream.?.writer(),
-    );
+    var stream = try std.net.tcpConnectToAddress(address);
 
-    log.info("connected to {s}:{} at {}", .{ self.host, self.port, address });
+    self.stream_reader = stream.reader(try self.ally.alloc(u8, mtu));
+    self.stream_writer = stream.writer(try self.ally.alloc(u8, mtu));
+    self.hdlc_reader = hdlc.Reader.init(self.stream_reader.?.interface());
+    self.hdlc_writer = hdlc.Writer.init(&self.stream_writer.?.interface);
+
+    log.info("connected to {s}:{d} at {f}", .{ self.host, self.port, address });
 }
 
 pub fn write(self: *Self, data: []const u8) !void {
     const writer = self.writer orelse return error.NotConnected;
     const n = try writer.writeFrame(data);
-    log.debug("sent {} bytes", .{n});
+    log.debug("sent {d} bytes", .{n});
 }
 
 fn handleFrame(self: *Self, data: []const u8) !void {
-    log.debug("handling frame ({} bytes)", .{data.len});
-    log.debug("raw bytes: {}", .{std.fmt.fmtSliceHexLower(data)});
+    log.debug("handling frame ({d} bytes)", .{data.len});
+    // log.debug("raw bytes: {f}", .{std.fmt.hex(data)});
 
     var factory = core.packet.Factory.init(self.ally, std.crypto.random, .{});
     var packet = factory.fromBytes(data) catch |err| {
-        log.err("failed to parse packet: {}", .{err});
+        log.err("failed to parse packet: {any}", .{err});
         return;
     };
 
@@ -104,11 +105,11 @@ fn handleFrame(self: *Self, data: []const u8) !void {
     var event = core.Node.Event.Out{ .packet = packet };
     defer event.deinit();
 
-    log.info("{}", .{event});
+    log.info("{f}", .{event});
 
     if (packet.header.purpose == .announce) {
         packet.validate() catch |err| {
-            log.err("announce validation failed: {}", .{err});
+            log.err("announce validation failed: {any}", .{err});
             return;
         };
         log.info("announce validation succeeded", .{});
