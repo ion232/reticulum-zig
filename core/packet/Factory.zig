@@ -51,8 +51,8 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
         return Error.InvalidAuthentication;
     }
 
-    var interface_access_code = data.Bytes.init(self.ally);
-    errdefer interface_access_code.deinit();
+    var interface_access_code = data.Bytes.empty;
+    errdefer interface_access_code.deinit(self.ally);
 
     if (self.config.access_code) |access_code| {
         if (bytes.len < index + access_code.len) {
@@ -61,7 +61,7 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
 
         // TODO: I need to decrypt the packet here.
 
-        try interface_access_code.appendSlice(bytes[index .. index + access_code.len]);
+        try interface_access_code.appendSlice(self.ally, bytes[index .. index + access_code.len]);
         index += access_code.len;
     }
 
@@ -155,17 +155,17 @@ pub fn fromBytes(self: *Self, bytes: []const u8) Error!Packet {
                 announce.signature = Signature.fromBytes(signature_bytes);
                 index += Signature.encoded_length;
 
-                var application_data = data.Bytes.init(self.ally);
-                try application_data.appendSlice(bytes[index..]);
+                var application_data = data.Bytes.empty;
+                try application_data.appendSlice(self.ally, bytes[index..]);
                 announce.application_data = application_data;
 
                 break :blk announce;
             },
         },
         else => .{ .raw = blk: {
-            var raw = data.Bytes.init(self.ally);
-            errdefer raw.deinit();
-            try raw.appendSlice(bytes[index..]);
+            var raw = data.Bytes.empty;
+            errdefer raw.deinit(self.ally);
+            try raw.appendSlice(self.ally, bytes[index..]);
             break :blk raw;
         } },
     };
@@ -191,31 +191,32 @@ pub fn makeAnnounce(self: *Self, endpoint: *const Endpoint, application_data: ?[
     var ratchet: crypto.Identity.Ratchet = undefined;
     self.rng.bytes(&ratchet);
     announce.ratchet = ratchet;
-    announce.application_data = data.Bytes.init(self.ally);
+    announce.application_data = data.Bytes.empty;
 
     if (application_data) |app_data| {
-        try announce.application_data.appendSlice(app_data);
+        try announce.application_data.appendSlice(self.ally, app_data);
     }
 
     announce.signature = blk: {
         var arena = std.heap.ArenaAllocator.init(self.ally);
         defer arena.deinit();
 
-        var bytes = data.Bytes.init(arena.allocator());
-        try bytes.appendSlice(endpoint.hash.short());
-        try bytes.appendSlice(announce.public.dh[0..]);
-        try bytes.appendSlice(announce.public.signature.bytes[0..]);
-        try bytes.appendSlice(announce.name_hash[0..]);
-        try bytes.appendSlice(announce.noise[0..]);
+        const arena_allocator = arena.allocator();
+        var bytes = data.Bytes.empty;
+        try bytes.appendSlice(arena_allocator, endpoint.hash.short());
+        try bytes.appendSlice(arena_allocator, announce.public.dh[0..]);
+        try bytes.appendSlice(arena_allocator, announce.public.signature.bytes[0..]);
+        try bytes.appendSlice(arena_allocator, announce.name_hash[0..]);
+        try bytes.appendSlice(arena_allocator, announce.noise[0..]);
         var timestamp_bytes: [5]u8 = undefined;
         std.mem.writeInt(u40, &timestamp_bytes, announce.timestamp, .big);
-        try bytes.appendSlice(&timestamp_bytes);
+        try bytes.appendSlice(arena_allocator, &timestamp_bytes);
 
         if (announce.ratchet) |*r| {
-            try bytes.appendSlice(r[0..]);
+            try bytes.appendSlice(arena_allocator, r[0..]);
         }
 
-        try bytes.appendSlice(announce.application_data.items);
+        try bytes.appendSlice(arena_allocator, announce.application_data.items);
 
         break :blk try identity.sign(bytes);
     };

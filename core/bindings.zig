@@ -12,8 +12,8 @@ const Language = enum {
     rust,
 };
 
-pub fn data(language: Language, ally: Allocator) !Bytes {
-    var exports = parseExports(@embedFile("exports.zig"), ally);
+pub fn data(ally: Allocator, language: Language) !Bytes {
+    var exports = parseExports(ally, @embedFile("exports.zig"));
 
     return switch (language) {
         .c => try exports.c(),
@@ -22,7 +22,7 @@ pub fn data(language: Language, ally: Allocator) !Bytes {
     };
 }
 
-fn parseExports(export_data: [:0]const u8, ally: Allocator) Exports {
+fn parseExports(ally: Allocator, export_data: [:0]const u8) Exports {
     const Ast = std.zig.Ast;
 
     const DocComment = struct {
@@ -51,71 +51,76 @@ fn parseExports(export_data: [:0]const u8, ally: Allocator) Exports {
     var exports = Exports.init(ally);
 
     for (root_declarations) |declaration_index| {
-        const declaration_tag = nodes.items(.tag)[declaration_index];
-        const main_token = nodes.items(.main_token)[declaration_index];
+        const declaration_index_value = @intFromEnum(declaration_index);
+        const declaration_tag = nodes.items(.tag)[declaration_index_value];
+        const main_token = nodes.items(.main_token)[declaration_index_value];
 
-        if (main_token <= 0 or tokens.items(.tag)[main_token - 1] != .keyword_pub) {
-            continue;
-        }
+        if (main_token <= 0 or tokens.items(.tag)[main_token - 1] != .keyword_pub) continue;
 
         if (declaration_tag == .fn_decl) {
             var buffer: [1]std.zig.Ast.Node.Index = undefined;
 
             const function_prototype = ast.fullFnProto(
                 &buffer,
-                nodes.items(.data)[declaration_index].lhs,
+                nodes.items(.data)[declaration_index_value].node_and_node[0],
             ) orelse continue;
 
-            const function = exports.functions.addOne() catch continue;
+            const function = exports.functions.addOne(ally) catch continue;
 
             function.* = .{
                 .doc_comment = DocComment.search(ast, main_token),
                 .name = ast.tokenSlice(function_prototype.name_token orelse continue),
-                .parameters = std.ArrayList(Function.Parameter).init(ally),
-                .return_value = ast.getNodeSource(function_prototype.ast.return_type),
+                .parameters = std.ArrayList(Function.Parameter).empty,
+                .return_value = ast.getNodeSource(function_prototype.ast.return_type.unwrap().?),
             };
 
             var parameters = function_prototype.iterate(&ast);
 
             while (parameters.next()) |parameter| {
                 const name = ast.tokenSlice(parameter.name_token orelse continue);
-                const @"type" = if (parameter.type_expr != 0) ast.getNodeSource(parameter.type_expr) else "unknown";
+                const @"type" = if (parameter.type_expr) |index| ast.getNodeSource(index) else "unknown";
 
-                function.parameters.append(.{ .name = name, .type = @"type" }) catch continue;
+                function.parameters.append(ally, .{ .name = name, .type = @"type" }) catch continue;
             }
         } else if (declaration_tag == .simple_var_decl) {
             const variable_declaration = ast.simpleVarDecl(declaration_index);
 
-            if (variable_declaration.ast.init_node == 0) continue;
+            if (variable_declaration.ast.init_node.unwrap() == null) continue;
 
-            switch (nodes.items(.tag)[variable_declaration.ast.init_node]) {
+            switch (nodes.items(.tag)[@intFromEnum(variable_declaration.ast.init_node)]) {
                 .container_decl_arg, .container_decl, .container_decl_arg_trailing, .container_decl_trailing => {},
                 else => continue,
             }
 
             var buffer: [2]std.zig.Ast.Node.Index = undefined;
-            const container_declaration = ast.fullContainerDecl(&buffer, variable_declaration.ast.init_node) orelse continue;
+            const container_declaration = ast.fullContainerDecl(&buffer, variable_declaration.ast.init_node.unwrap().?) orelse continue;
 
             if (tokens.items(.tag)[container_declaration.ast.main_token] != .keyword_enum) continue;
 
-            const @"enum" = exports.enums.addOne() catch continue;
+            const @"enum" = exports.enums.addOne(ally) catch continue;
 
             @"enum".* = .{
                 .doc_comment = DocComment.search(ast, main_token),
                 .name = ast.tokenSlice(main_token + 1),
-                .values = std.ArrayList(Enum.Value).init(ally),
+                .values = std.ArrayList(Enum.Value).empty,
             };
 
             for (container_declaration.ast.members) |member_index| {
-                if (nodes.items(.tag)[member_index] != .container_field_init) {
-                    continue;
+                const member_index_value = @intFromEnum(member_index);
+
+                if (nodes.items(.tag)[member_index_value] != .container_field_init) continue;
+
+                const name = ast.tokenSlice(nodes.items(.main_token)[member_index_value]);
+                const member_data = nodes.items(.data)[member_index_value];
+
+                if (member_data.node_and_opt_node[1].unwrap()) |node| {
+                    const number = ast.getNodeSource(node);
+
+                    @"enum".values.append(
+                        ally,
+                        .{ .name = name, .number = number },
+                    ) catch continue;
                 }
-
-                const name = ast.tokenSlice(nodes.items(.main_token)[member_index]);
-                const member_data = nodes.items(.data)[member_index];
-                const number = ast.getNodeSource(member_data.rhs);
-
-                @"enum".values.append(.{ .name = name, .number = number }) catch continue;
             }
         }
     }
@@ -133,16 +138,16 @@ const Exports = struct {
     fn init(ally: Allocator) Self {
         return .{
             .ally = ally,
-            .enums = std.ArrayList(Enum).init(ally),
-            .functions = std.ArrayList(Function).init(ally),
+            .enums = std.ArrayList(Enum).empty,
+            .functions = std.ArrayList(Function).empty,
         };
     }
 
     fn c(self: *Self) !Bytes {
-        var bytes = Bytes.init(self.ally);
+        var bytes = Bytes.empty;
 
         const b = &bytes;
-        try b.appendSlice(
+        try b.appendSlice(self.ally,
             \\#ifndef RT_CORE_H
             \\#define RT_CORE_H
             \\
@@ -153,47 +158,47 @@ const Exports = struct {
         );
 
         for (self.enums.items) |e| {
-            try b.appendSlice("// ");
-            try b.appendSlice(e.doc_comment);
-            try b.append('\n');
+            try b.appendSlice(self.ally, "// ");
+            try b.appendSlice(self.ally, e.doc_comment);
+            try b.append(self.ally, '\n');
 
-            try b.appendSlice("typedef enum {\n");
+            try b.appendSlice(self.ally, "typedef enum {\n");
 
             for (e.values.items) |v| {
-                try b.appendSlice("    ");
-                try b.appendSlice(v.name);
-                try b.appendSlice(" = ");
-                try b.appendSlice(v.number);
-                try b.appendSlice(",\n");
+                try b.appendSlice(self.ally, "    ");
+                try b.appendSlice(self.ally, v.name);
+                try b.appendSlice(self.ally, " = ");
+                try b.appendSlice(self.ally, v.number);
+                try b.appendSlice(self.ally, ",\n");
             }
 
-            try b.appendSlice("} ");
-            try deriveType(b, e.name);
-            try b.appendSlice(";\n\n");
+            try b.appendSlice(self.ally, "} ");
+            try self.deriveType(b, e.name);
+            try b.appendSlice(self.ally, ";\n\n");
         }
 
         for (self.functions.items) |f| {
-            try b.appendSlice("// ");
-            try b.appendSlice(f.doc_comment);
-            try b.append('\n');
+            try b.appendSlice(self.ally, "// ");
+            try b.appendSlice(self.ally, f.doc_comment);
+            try b.append(self.ally, '\n');
 
-            try deriveType(b, f.return_value);
-            try b.append(' ');
-            try deriveName(b, f.name);
-            try b.append('(');
+            try self.deriveType(b, f.return_value);
+            try b.append(self.ally, ' ');
+            try self.deriveName(b, f.name);
+            try b.append(self.ally, '(');
 
             for (f.parameters.items, 0..) |p, i| {
-                try parameter(b, p.name, p.type);
+                try self.parameter(b, p.name, p.type);
 
                 if (i != f.parameters.items.len - 1) {
-                    try b.appendSlice(", ");
+                    try b.appendSlice(self.ally, ", ");
                 }
             }
 
-            try b.appendSlice(");\n\n");
+            try b.appendSlice(self.ally, ");\n\n");
         }
 
-        try b.appendSlice(
+        try b.appendSlice(self.ally,
             \\#endif
             \\
         );
@@ -202,32 +207,34 @@ const Exports = struct {
     }
 
     fn rust(self: *Self) !Bytes {
-        return Bytes.init(self.ally);
+        _ = self;
+        return Bytes.empty;
     }
 
     fn js(self: *Self) !Bytes {
-        return Bytes.init(self.ally);
+        _ = self;
+        return Bytes.empty;
     }
 
-    fn parameter(b: *Bytes, name: []const u8, @"type": []const u8) !void {
+    fn parameter(self: *Self, b: *Bytes, name: []const u8, @"type": []const u8) !void {
         if (eql(u8, @"type", "lib.System.SimpleClock.Callback")) {
-            try b.appendSlice("int64_t (*");
-            try b.appendSlice(name);
-            try b.appendSlice(")(void)");
+            try b.appendSlice(self.ally, "int64_t (*");
+            try b.appendSlice(self.ally, name);
+            try b.appendSlice(self.ally, ")(void)");
         } else if (eql(u8, @"type", "lib.System.SimpleRng.Callback")) {
-            try b.appendSlice("void (*");
-            try b.appendSlice(name);
-            try b.appendSlice(")(uint8_t* buf, ");
-            try deriveType(b, "usize");
-            try b.appendSlice(" length)");
+            try b.appendSlice(self.ally, "void (*");
+            try b.appendSlice(self.ally, name);
+            try b.appendSlice(self.ally, ")(uint8_t* buf, ");
+            try self.deriveType(b, "usize");
+            try b.appendSlice(self.ally, " length)");
         } else if (eql(u8, @"type", "Error")) {
-            try reticulumType(b, @"type");
+            try self.reticulumType(b, @"type");
         } else {
-            try deriveType(b, @"type");
+            try self.deriveType(b, @"type");
         }
     }
 
-    fn deriveType(b: *Bytes, string: []const u8) !void {
+    fn deriveType(self: *Self, b: *Bytes, string: []const u8) !void {
         const translations = std.StaticStringMap([]const u8).initComptime(.{
             .{ "c_int", "int" },
             .{ "anyopaque", "void" },
@@ -249,30 +256,30 @@ const Exports = struct {
         });
 
         if (translations.get(string)) |translation| {
-            try b.appendSlice(translation);
+            try b.appendSlice(self.ally, translation);
         } else {
-            try reticulumType(b, string);
+            try self.reticulumType(b, string);
         }
     }
 
-    fn reticulumType(b: *Bytes, string: []const u8) !void {
-        try deriveName(b, string);
-        try b.appendSlice("_t");
+    fn reticulumType(self: *Self, b: *Bytes, string: []const u8) !void {
+        try self.deriveName(b, string);
+        try b.appendSlice(self.ally, "_t");
     }
 
-    fn deriveName(b: *Bytes, string: []const u8) !void {
-        try b.appendSlice("rt_core");
+    fn deriveName(self: *Self, b: *Bytes, string: []const u8) !void {
+        try b.appendSlice(self.ally, "rt_core");
 
         if (string.len > 0 and !std.ascii.isUpper(string[0])) {
-            try b.append('_');
+            try b.append(self.ally, '_');
         }
 
         for (string) |char| {
             if (std.ascii.isUpper(char)) {
-                try b.append('_');
-                try b.append(std.ascii.toLower(char));
+                try b.append(self.ally, '_');
+                try b.append(self.ally, std.ascii.toLower(char));
             } else {
-                try b.append(char);
+                try b.append(self.ally, char);
             }
         }
     }

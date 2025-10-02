@@ -5,6 +5,8 @@ const Packet = @import("../packet.zig").Managed;
 const Payload = @import("../packet.zig").Payload;
 const Hash = @import("../crypto/Hash.zig");
 
+const Allocator = std.mem.Allocator;
+
 // TODO: Perhaps distinguish between tasks and packets.
 
 pub const In = union(enum) {
@@ -22,11 +24,11 @@ pub const In = union(enum) {
         payload: Payload,
     };
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: *@This(), ally: Allocator) void {
         switch (self.*) {
             .announce => |*announce| {
-                if (announce.app_data) |app_data| {
-                    app_data.deinit();
+                if (announce.app_data) |*app_data| {
+                    app_data.deinit(ally);
                 }
             },
             .packet => |*packet| {
@@ -34,7 +36,7 @@ pub const In = union(enum) {
             },
             .plain => |*plain| {
                 plain.name.deinit();
-                plain.payload.deinit();
+                plain.payload.deinit(ally);
             },
         }
     }
@@ -52,53 +54,49 @@ pub const Out = union(enum) {
     }
 
     // TODO: Replace this with a cleaner implementation.
-    pub fn format(this: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, w: anytype) !void {
-        _ = fmt;
-        _ = options;
-
+    pub fn format(this: @This(), writer: *std.Io.Writer) !void {
         const F = struct {
             const Self = @This();
 
-            writer: @TypeOf(w),
+            io_writer: *std.Io.Writer,
             indentation: u8 = 0,
 
-            fn init(writer: @TypeOf(w)) Self {
+            fn init(io_writer: *std.Io.Writer) Self {
                 return .{
-                    .writer = writer,
+                    .io_writer = io_writer,
                 };
             }
 
             fn indent(self: *Self) !void {
                 for (0..self.indentation) |_| {
-                    try self.writer.print(" ", .{});
+                    try self.io_writer.print(" ", .{});
                 }
             }
 
             fn entry(self: *Self, key: []const u8, comptime value_fmt: []const u8, args: anytype) !void {
                 try self.indent();
-                try self.writer.print(".{s} = ", .{key});
-                try self.writer.print(value_fmt ++ ",\n", args);
+                try self.io_writer.print(".{s} = ", .{key});
+                try self.io_writer.print(value_fmt ++ ",\n", args);
             }
 
             fn objectStart(self: *Self, key: []const u8, tag: []const u8) !void {
                 try self.indent();
-                try self.writer.print(".{s} = .{s}{{\n", .{ key, tag });
+                try self.io_writer.print(".{s} = .{s}{{\n", .{ key, tag });
                 self.indentation += 2;
             }
 
             fn objectEnd(self: *Self) !void {
                 self.indentation -= 2;
                 try self.indent();
-                try self.writer.print("}},\n", .{});
+                try self.io_writer.print("}},\n", .{});
             }
 
             fn print(self: *Self, comptime text: []const u8, args: anytype) !void {
-                try self.writer.print(text, args);
+                try self.io_writer.print(text, args);
             }
         };
 
-        const hex = std.fmt.fmtSliceHexLower;
-        var f = F.init(w);
+        var f = F.init(writer);
 
         switch (this) {
             .packet => |p| {
@@ -116,19 +114,19 @@ pub const Out = union(enum) {
                 });
 
                 if (p.interface_access_code.items.len > 0) {
-                    try f.entry("interface_access_code", "{x}", .{hex(p.interface_access_code.items)});
+                    try f.entry("interface_access_code", "{x}", .{p.interface_access_code.items});
                 }
 
                 switch (p.endpoints) {
                     .normal => |n| {
                         try f.entry("endpoints", ".normal{{{x}}}", .{
-                            hex(&n.endpoint),
+                            &n.endpoint,
                         });
                     },
                     .transport => |t| {
                         try f.entry("endpoints", ".transport{{{x}, {x}}}", .{
-                            hex(&t.endpoint),
-                            hex(&t.transport_id),
+                            &t.endpoint,
+                            &t.transport_id,
                         });
                     },
                 }
@@ -139,26 +137,26 @@ pub const Out = union(enum) {
                     .announce => |a| {
                         try f.objectStart("payload", "announce");
 
-                        try f.entry("public.dh", "{x}", .{hex(&a.public.dh)});
-                        try f.entry("public.signature", "{x}", .{hex(&a.public.signature.bytes)});
-                        try f.entry("name_hash", "{x}", .{hex(&a.name_hash)});
-                        try f.entry("noise", "{x}", .{hex(&a.noise)});
+                        try f.entry("public.dh", "{x}", .{&a.public.dh});
+                        try f.entry("public.signature", "{x}", .{&a.public.signature.bytes});
+                        try f.entry("name_hash", "{x}", .{&a.name_hash});
+                        try f.entry("noise", "{x}", .{&a.noise});
                         var timestamp_bytes: [5]u8 = undefined;
                         std.mem.writeInt(u40, &timestamp_bytes, a.timestamp, .big);
-                        try f.entry("timestamp", "{x}", .{hex(&timestamp_bytes)});
+                        try f.entry("timestamp", "{x}", .{&timestamp_bytes});
                         if (a.ratchet) |*ratchet| {
-                            try f.entry("ratchet", "{x}", .{hex(ratchet)});
+                            try f.entry("ratchet", "{x}", .{ratchet});
                         }
-                        try f.entry("signature", "{x}", .{hex(&a.signature.toBytes())});
+                        try f.entry("signature", "{x}", .{&a.signature.toBytes()});
 
                         if (a.application_data.items.len > 0) {
-                            try f.entry("application_data", "{x}", .{hex(a.application_data.items)});
+                            try f.entry("application_data", "{x}", .{a.application_data.items});
                         }
 
                         try f.objectEnd();
                     },
                     .raw => |r| {
-                        try f.entry("payload", ".raw{{{x}}}", .{hex(r.items)});
+                        try f.entry("payload", ".raw{{{x}}}", .{r.items});
                     },
                     .none => {
                         try f.entry("payload", ".none", .{});

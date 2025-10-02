@@ -28,7 +28,7 @@ pub fn init(ally: Allocator) Self {
     return Self{
         .ally = ally,
         .header = .{},
-        .interface_access_code = data.Bytes.init(ally),
+        .interface_access_code = data.Bytes.empty,
         .endpoints = null,
         .context = .none,
         .payload = .none,
@@ -41,7 +41,7 @@ pub fn setHeader(self: *Self, header: Header) *Self {
 }
 
 pub fn setInterfaceAccessCode(self: *Self, interface_access_code: []const u8) !*Self {
-    try self.interface_access_code.appendSlice(interface_access_code);
+    try self.interface_access_code.appendSlice(self.ally, interface_access_code);
 
     if (interface_access_code.len > 0) {
         self.header.interface = .authenticated;

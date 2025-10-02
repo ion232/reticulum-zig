@@ -10,7 +10,7 @@ const System = @import("System.zig");
 const Self = @This();
 
 const Entry = struct {
-    ratchets: std.fifo.LinearFifo(Ratchet, .Dynamic),
+    ratchets: []Ratchet,
     last_rotation_time: u64,
 };
 
@@ -37,7 +37,7 @@ pub fn add(self: *Self, endpoint: Hash.Short, now: u64) !Ratchet {
     const key = try self.ally.dupe(u8, &endpoint);
 
     try self.entries.put(key, .{
-        .ratchets = self.ally,
+        .ratchets = self.ally.alloc(Ratchet, max_ratchets),
         .last_rotation_time = now,
     });
 
@@ -46,25 +46,29 @@ pub fn add(self: *Self, endpoint: Hash.Short, now: u64) !Ratchet {
 }
 
 pub fn getRatchet(self: *Self, endpoint: Hash.Short, now: u64) !?Ratchet {
-    if (self.entries.getPtr(&endpoint)) |entry| {
-        const needs_rotating = now - entry.last_rotation_time >= rotation_period;
+    _ = self;
+    _ = endpoint;
+    _ = now;
 
-        if (needs_rotating) {
-            var seed: [crypto.X25519.seed_length]u8 = undefined;
-            self.rng.bytes(&seed);
+    // if (self.entries.getPtr(&endpoint)) |entry| {
+    //     const needs_rotating = now - entry.last_rotation_time >= rotation_period;
 
-            const ratchet = try crypto.X25519.KeyPair.generateDeterministic(seed);
+    //     if (needs_rotating) {
+    //         var seed: [crypto.X25519.seed_length]u8 = undefined;
+    //         self.rng.bytes(&seed);
 
-            if (entry.ratchets.count >= max_ratchets) {
-                entry.ratchets.discard(1);
-            }
+    //         const ratchet = try crypto.X25519.KeyPair.generateDeterministic(seed);
 
-            entry.ratchets.writeItem(ratchet.public_key);
-            entry.last_rotation_time = now;
-        }
+    //         if (entry.ratchets.count >= max_ratchets) {
+    //             entry.ratchets.discard(1);
+    //         }
 
-        return entry.ratchets.peekItem(entry.ratchets.count - 1);
-    }
+    //         entry.ratchets.writeItem(ratchet.public_key);
+    //         entry.last_rotation_time = now;
+    //     }
+
+    //     return entry.ratchets.peekItem(entry.ratchets.count - 1);
+    // }
 
     return null;
 }
@@ -74,7 +78,7 @@ pub fn deinit(self: *Self) void {
 
     while (entries.next()) |entry| {
         self.ally.free(entry.key_ptr.*);
-        entry.value_ptr.ratchets.deinit();
+        // entry.value_ptr.ratchets.deinit();
     }
 
     self.entries.deinit();

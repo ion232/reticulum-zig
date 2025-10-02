@@ -109,7 +109,7 @@ pub fn process(self: *Self) !void {
 fn eventsIn(self: *Self, interface: *Interface, now: u64) !void {
     while (interface.incoming.pop()) |event_in| {
         var event = event_in;
-        defer event.deinit();
+        defer event.deinit(self.ally);
 
         try switch (event) {
             .announce => |*announce| self.announceTask(interface, announce, now),
