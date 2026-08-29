@@ -1,0 +1,6 @@
+name: []const u8 = "unknown",
+access_code: ?[]const u8 = null,
+mode: Mode = .full,
+directionality: Directionality = .both,
+bit_rate: BitRate = BitRate.default,
+max_held_packets: usize = 1000,

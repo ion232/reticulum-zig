@@ -68,20 +68,13 @@ pub fn build(self: *Self) Error!Managed {
         return Error.MissingIdentity;
     }
 
-    const hash = blk: {
-        const name_hash = name.hash.name();
-
-        if (self.identity) |identity| {
-            break :blk Hash.of(.{
-                .name_hash = name_hash,
-                .identity_hash = identity.hash.short(),
-            });
-        } else {
-            break :blk Hash.of(.{
-                .name_hash = name_hash,
-            });
-        }
-    };
+    const name_hash = name.hash.name();
+    const hash = if (self.identity) |identity| Hash.of(.{
+        .name_hash = name_hash,
+        .identity_hash = identity.hash.short(),
+    }) else Hash.of(.{
+        .name_hash = name_hash,
+    });
 
     const result = Managed{
         .ally = self.ally,

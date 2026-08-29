@@ -57,7 +57,7 @@ pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) 
         try self.aspects.append(self.ally, new_aspect);
     }
 
-    self.hash = blk: {
+    self.hash = hash: {
         var name = data.Bytes.empty;
         defer name.deinit(self.ally);
 
@@ -68,7 +68,7 @@ pub fn init(app_name: []const u8, aspects: []const []const u8, ally: Allocator) 
             try name.appendSlice(self.ally, aspect);
         }
 
-        break :blk Hash.of(.{
+        break :hash Hash.of(.{
             .name = name.items,
         });
     };

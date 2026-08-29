@@ -12,6 +12,7 @@ pub const short_length: usize = long_length / 2;
 pub const name_length: usize = 10;
 // 0.0007% collision chance for 1_000_000 packets.
 // Could go down to 6 at 0.0018% chance for 100_000 packets. Needs investigation.
+// Alternatively, use bloom / cuckoo filters.
 pub const packet_length: usize = 7;
 
 pub const Long = [long_length]u8;

@@ -3,6 +3,7 @@ const std = @import("std");
 const crypto = @import("crypto.zig");
 
 const Allocator = std.mem.Allocator;
+const Fifo = @import("../adt.zig").Fifo;
 const Hash = crypto.Hash;
 const Ratchet = [32]u8;
 const System = @import("System.zig");
@@ -10,7 +11,7 @@ const System = @import("System.zig");
 const Self = @This();
 
 const Entry = struct {
-    ratchets: []Ratchet,
+    ratchets: Fifo(Ratchet),
     last_rotation_time: u64,
 };
 

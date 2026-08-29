@@ -6,8 +6,7 @@ const Hash = @import("../crypto.zig").Hash;
 
 const Self = @This();
 
-ally: Allocator,
-// TODO: For embedded this should probably be an LRU cache.
+// TODO: Use a cuckoo filter instead.
 hashes: std.StringArrayHashMap(void),
 
 pub fn init(ally: Allocator, capacity: usize) !Self {
@@ -23,9 +22,11 @@ pub fn init(ally: Allocator, capacity: usize) !Self {
 pub fn add(self: *Self, packet: *const Packet) void {
     if (self.hashes.count() == self.hashes.capacity()) {
         var hashes = self.hashes.iterator();
+
         while (hashes.next()) |entry| {
             self.ally.free(entry.key_ptr.*);
         }
+
         self.hashes.clearRetainingCapacity();
     }
 

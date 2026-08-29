@@ -1,9 +1,8 @@
 const std = @import("std");
-const data = @import("data.zig");
-
-pub const Manager = @import("interface/Manager.zig");
+const adt = @import("adt.zig");
 
 const Allocator = std.mem.Allocator;
+const Api = @import("Interface/Api.zig");
 const BitRate = @import("unit.zig").BitRate;
 const Event = @import("Node.zig").Event;
 const Endpoint = @import("endpoint.zig").Managed;
@@ -13,7 +12,7 @@ const PacketBuilder = @import("packet.zig").Builder;
 const PacketFactory = @import("packet.zig").Factory;
 const Payload = @import("packet.zig").Payload;
 const Name = @import("endpoint/Name.zig");
-const ThreadSafeFifo = @import("internal/ThreadSafeFifo.zig").ThreadSafeFifo;
+const Fifo = @import("adt/Fifo.zig").Fifo;
 
 pub const Id = usize;
 pub const Mode = enum {
@@ -24,7 +23,8 @@ pub const Mode = enum {
     boundary,
     gateway,
 
-    pub fn route_lifetime(self: @This()) u64 {
+    pub fn routeLifetime(self: @This()) u64 {
+        // TODO: Maybe have a Duration struct with these already defined.
         const one_day = std.time.us_per_day;
         const six_hours = 6 * std.time.us_per_hour;
         const seven_weeks = 7 * std.time.us_per_week;
@@ -36,65 +36,66 @@ pub const Mode = enum {
         };
     }
 };
-pub const Incoming = ThreadSafeFifo(Event.In);
-pub const Outgoing = ThreadSafeFifo(Event.Out);
-pub const Config = struct {
-    name: []const u8 = "unknown",
-    access_code: ?[]const u8 = null,
-    mode: Mode = .full,
-    initial_bit_rate: BitRate = BitRate.default,
-    max_held_packets: usize = 1000,
+
+pub const Directionality = enum {
+    in,
+    out,
+    both,
 };
+pub const Incoming = Fifo(Event.In);
+pub const Outgoing = Fifo(Event.Out);
 
 pub const Error = Incoming.Error || Outgoing.Error || PacketFactory.Error || Allocator.Error;
 
 const Self = @This();
 
 // TODO: Account for interfaces that only receive packets and don't transmit.
-// TODO: Find a less error prone way to define the API.
-// TODO: Rethink and refactor the event API.
+// TODO: Rethink and refactor the event API. Most likely have an interface level API and a node level API.
 
-ally: Allocator,
 id: Id,
-incoming: *Incoming,
-outgoing: *Outgoing,
-packet_factory: PacketFactory,
+incoming: Incoming,
+outgoing: Outgoing,
+storage: Packet.Storage,
 mode: Mode,
+directionality: Directionality,
 bit_rate: ?BitRate,
 
 pub fn init(
-    ally: Allocator,
     config: Config,
     id: Id,
-    incoming: *Incoming,
-    outgoing: *Outgoing,
+    incoming: Incoming,
+    outgoing: Outgoing,
     packet_factory: PacketFactory,
 ) Self {
     return Self{
-        .ally = ally,
         .id = id,
         .incoming = incoming,
         .outgoing = outgoing,
         .packet_factory = packet_factory,
         .mode = config.mode,
-        .bit_rate = config.initial_bit_rate,
+        .directionality = config.directionality,
+        .bit_rate = config.bit_rate,
     };
 }
 
-pub fn announce(ptr: *anyopaque, hash: Hash, app_data: ?data.Bytes) Error!void {
+pub fn announce(ptr: *anyopaque, hash: Hash, app_data: []const u8) Error!void {
     try deliverEvent(ptr, Event.In{
-        .announce = .{
-            .hash = hash,
-            .app_data = app_data,
+        .task = .{
+            .announce = .{
+                .hash = hash,
+                .app_data = app_data,
+            },
         },
     });
 }
 
 pub fn plain(ptr: *anyopaque, name: Name, payload: Payload) Error!void {
     try deliverEvent(ptr, Event.In{
-        .plain = .{
-            .name = name,
-            .payload = payload,
+        .task = .{
+            .plain = .{
+                .name = name,
+                .payload = payload,
+            },
         },
     });
 }
@@ -138,37 +139,3 @@ pub fn api(self: *Self) Api {
         .collectEventFn = collectEvent,
     };
 }
-
-pub const Api = struct {
-    ptr: *anyopaque,
-    announceFn: *const fn (ptr: *anyopaque, hash: Hash, app_data: ?data.Bytes) Error!void,
-    plainFn: *const fn (ptr: *anyopaque, name: Name, payload: Payload) Error!void,
-    deliverRawPacketFn: *const fn (ptr: *anyopaque, raw_bytes: []const u8) Error!void,
-    deliverPacketFn: *const fn (ptr: *anyopaque, packet: Packet) Error!void,
-    deliverEventFn: *const fn (ptr: *anyopaque, event: Event.In) Error!void,
-    collectEventFn: *const fn (ptr: *anyopaque) ?Event.Out,
-
-    pub fn announce(self: *@This(), hash: Hash, app_data: ?data.Bytes) Error!void {
-        return self.announceFn(self.ptr, hash, app_data);
-    }
-
-    pub fn plain(self: *@This(), name: Name, payload: Payload) Error!void {
-        return self.plainFn(self.ptr, name, payload);
-    }
-
-    pub fn deliverRawPacket(self: *@This(), raw_bytes: []const u8) Error!void {
-        return self.deliverRawPacketFn(self.ptr, raw_bytes);
-    }
-
-    pub fn deliverPacket(self: *@This(), packet: Packet) Error!void {
-        return self.deliverPacketFn(self.ptr, packet);
-    }
-
-    pub fn deliverEvent(self: *@This(), event: Event.In) Error!void {
-        return self.deliverEventFn(self.ptr, event);
-    }
-
-    pub fn collectEvent(self: *@This()) ?Event.Out {
-        return self.collectEventFn(self.ptr);
-    }
-};

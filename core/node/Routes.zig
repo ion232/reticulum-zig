@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const crypto = @import("crypto.zig");
 
@@ -15,7 +16,7 @@ pub const Entry = struct {
     };
     const Noises = std.AutoArrayHashMap(TimestampedNoise, void);
 
-    source_interface: Interface.Id,
+    origin_interface_id: Interface.Id,
     next_hop: Hash.Short,
     hops: u8,
     last_seen: u64,
@@ -69,27 +70,33 @@ pub fn setState(self: *Self, endpoint: Hash.Short, state: State) void {
     }
 }
 
-pub fn updateFrom(self: *Self, packet: *const Packet, interface: *const Interface, now: u64) !void {
-    const endpoint = packet.endpoints.endpoint();
-    const next_hop = packet.endpoints.nextHop();
-    const timestamp = packet.payload.announce.timestamp;
-    const noise = packet.payload.announce.noise;
+pub fn updateFrom(self: *Self, announce: *const Packet, interface: *const Interface, now: u64) !void {
+    const endpoint = announce.endpoints.endpoint();
+    const next_hop = announce.endpoints.nextHop();
+    const timestamp = announce.payload.announce.timestamp;
+    const noise = announce.payload.announce.noise;
 
     var entry = Entry{
-        .source_interface = interface.id,
+        .origin_interface_id = interface.id,
         .next_hop = next_hop,
-        .hops = packet.header.hops,
+        .hops = announce.header.hops,
         .last_seen = now,
-        .expiry_time = now + interface.mode.route_lifetime(),
+        .expiry_time = now + interface.mode.routeLifetime(),
         .noises = Entry.Noises.init(self.ally),
         .latest_timestamp = timestamp,
-        .packet_hash = packet.hash(),
+        .packet_hash = announce.hash(),
         .state = .unknown,
     };
 
     if (self.entries.getPtr(&endpoint)) |current_entry| {
         entry.noises = current_entry.noises;
         entry.latest_timestamp = @max(timestamp, entry.latest_timestamp);
+    }
+
+    const max_noises = 64;
+
+    if (entry.noises.count() >= max_noises) {
+        entry.noises.orderedRemoveAt(0);
     }
 
     try entry.noises.put(.{

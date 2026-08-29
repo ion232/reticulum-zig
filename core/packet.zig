@@ -1,128 +1,51 @@
 const std = @import("std");
 const crypto = @import("crypto.zig");
-const data = @import("data.zig");
 const endpoint = @import("endpoint.zig");
 
-const Allocator = std.mem.Allocator;
 const Endpoint = endpoint.Managed;
 const Hash = crypto.Hash;
 const Identity = crypto.Identity;
 
 pub const Builder = @import("packet/Builder.zig");
 pub const Factory = @import("packet/Factory.zig");
-pub const Filter = @import("packet/Filter.zig");
-pub const Managed = @import("packet/Managed.zig");
-pub const Packet = Managed;
+pub const Filter = @import("Packet/Filter.zig");
+pub const Storage = @import("Packet/Storage.zig");
+pub const View = @import("Packet/View.zig");
 
-pub const Payload = union(enum) {
+pub const max_transmission_unit = 500;
+pub const min_header = @sizeOf(Header) + @sizeOf(Endpoints) + @sizeOf(Context);
+pub const max_payload_size = max_transmission_unit - min_header;
+
+pub const Buffer = [max_transmission_unit]u8;
+pub const AccessCode = []const u8;
+
+pub const PayloadTag = enum { announce, raw, none };
+
+pub const Endpoints = union(Header.Flag.Endpoints) {
     const Self = @This();
 
-    pub const Announce = struct {
-        pub const Noise = [5]u8;
-        pub const Timestamp = u40;
-        pub const minimum_size = blk: {
-            var total = 0;
-            total += crypto.X25519.public_length;
-            total += crypto.Ed25519.PublicKey.encoded_length;
-            total += crypto.Hash.name_length;
-            total += @sizeOf(Noise);
-            total += @sizeOf(Timestamp);
-            total += crypto.Ed25519.Signature.encoded_length;
-            break :blk total;
-        };
-
-        public: Identity.Public,
-        name_hash: Hash.Name,
-        noise: Noise,
-        timestamp: Timestamp,
-        ratchet: ?crypto.Identity.Ratchet,
-        signature: crypto.Ed25519.Signature,
-        application_data: data.Bytes,
+    pub const Single = packed struct {
+        target: Hash.Short,
     };
 
-    announce: Announce,
-    raw: data.Bytes,
-    none,
-
-    pub fn makeRaw(bytes: data.Bytes) Self {
-        return Self{
-            .raw = bytes,
-        };
-    }
-
-    pub fn clone(self: Self, ally: Allocator) !Self {
-        return switch (self) {
-            .announce => |a| Self{
-                .announce = Announce{
-                    .public = a.public,
-                    .name_hash = a.name_hash,
-                    .noise = a.noise,
-                    .timestamp = a.timestamp,
-                    .ratchet = a.ratchet,
-                    .signature = a.signature,
-                    .application_data = try a.application_data.clone(ally),
-                },
-            },
-            .raw => |r| Self{
-                .raw = try r.clone(ally),
-            },
-            .none => Self.none,
-        };
-    }
-
-    pub fn size(self: *const Self) usize {
-        return switch (self.*) {
-            .announce => |*a| blk: {
-                var total: usize = 0;
-                total += crypto.X25519.public_length;
-                total += crypto.Ed25519.PublicKey.encoded_length;
-                total += crypto.Hash.name_length;
-                total += @sizeOf(Announce.Noise);
-                total += @sizeOf(Announce.Timestamp);
-                total += if (a.ratchet != null) @sizeOf(crypto.Identity.Ratchet) else 0;
-                total += crypto.Ed25519.Signature.encoded_length;
-                total += a.application_data.items.len;
-                break :blk total;
-            },
-            .raw => |*r| r.items.len,
-            .none => 0,
-        };
-    }
-
-    pub fn deinit(self: *Self, ally: Allocator) void {
-        return switch (self.*) {
-            .announce => |*announce| announce.application_data.deinit(ally),
-            .raw => |*raw| raw.deinit(ally),
-            .none => {},
-        };
-    }
-};
-
-pub const Endpoints = union(Header.Flag.Format) {
-    const Self = @This();
-
-    pub const Normal = struct {
-        endpoint: Hash.Short,
-    };
-
-    pub const Transport = struct {
+    pub const Transport = packed struct {
         transport_id: Hash.Short,
-        endpoint: Hash.Short,
+        target: Hash.Short,
     };
 
-    normal: Normal,
+    single: Single,
     transport: Transport,
 
     pub fn endpoint(self: Self) Hash.Short {
         return switch (self) {
-            .normal => |n| n.endpoint,
+            .single => |s| s.target,
             .transport => |t| t.endpoint,
         };
     }
 
     pub fn nextHop(self: Self) Hash.Short {
         return switch (self) {
-            .normal => |n| n.endpoint,
+            .single => |s| s.target,
             .transport => |t| t.transport_id,
         };
     }
@@ -135,8 +58,8 @@ pub const Header = packed struct(u16) {
             authenticated,
         };
 
-        pub const Format = enum(u1) {
-            normal,
+        pub const Endpoints = enum(u1) {
+            single,
             transport,
         };
 
@@ -150,7 +73,7 @@ pub const Header = packed struct(u16) {
             transport,
         };
 
-        pub const Endpoint = endpoint.Variant;
+        pub const Method = endpoint.Method;
 
         pub const Purpose = enum(u2) {
             data,
@@ -161,36 +84,36 @@ pub const Header = packed struct(u16) {
     };
 
     purpose: Flag.Purpose = .data,
-    endpoint: Flag.Endpoint = .single,
+    method: Flag.Method = .datagram,
     propagation: Flag.Propagation = .broadcast,
     context: Flag.Context = .none,
-    format: Flag.Format = .normal,
+    endpoints: Flag.Endpoints = .single,
     interface: Flag.Interface = .open,
     hops: u8 = 0,
 };
 
 pub const Context = enum(u8) {
     none = 0,
-    resource,
-    resource_advertisement,
-    resource_request,
-    resource_hashmap_update,
-    resource_proof,
-    resource_initiator_cancel,
-    resource_receiver_cancel,
-    cache_request,
-    request,
-    response,
-    path_response,
-    command,
-    command_status,
-    link_channel,
+    resource = 1,
+    resource_advertisement = 2,
+    resource_request = 3,
+    resource_hashmap_update = 4,
+    resource_proof = 5,
+    resource_initiator_cancel = 6,
+    resource_receiver_cancel = 7,
+    cache_request = 8,
+    request = 9,
+    response = 10,
+    path_response = 11,
+    command = 12,
+    command_status = 13,
+    link_channel = 14,
     keep_alive = 250,
-    link_identify,
-    link_close,
-    link_proof,
-    link_request_rtt,
-    link_request_proof,
+    link_identify = 251,
+    link_close = 252,
+    link_proof = 253,
+    link_request_rtt = 254,
+    link_request_proof = 255,
 };
 
 test "validate-raw-announce-roundtrip" {
@@ -211,10 +134,7 @@ test "validate-raw-announce-roundtrip" {
     }
 
     var factory = Factory.init(ally, rng, .{});
-    var p = factory.fromBytes(bytes.items) catch |err| {
-        std.debug.print("Failed to parse packet: {}\n", .{err});
-        return;
-    };
+    var p = try factory.fromBytes(bytes.items);
     defer p.deinit();
 
     try t.expect(p.header.purpose == .announce);
@@ -225,10 +145,7 @@ test "validate-raw-announce-roundtrip" {
 
     var buffer: [1024]u8 = undefined;
 
-    var q = factory.fromBytes(try p.write(&buffer)) catch |err| {
-        std.debug.print("Failed to parse packet: {}\n", .{err});
-        return;
-    };
+    var q = try factory.fromBytes(try p.write(&buffer));
     defer q.deinit();
 
     try t.expect(q.header.purpose == .announce);

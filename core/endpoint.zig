@@ -8,8 +8,8 @@ pub const Direction = enum {
     out,
 };
 
-pub const Variant = enum(u2) {
-    single,
+pub const Method = enum(u2) {
+    datagram,
     group,
     plain,
     link,

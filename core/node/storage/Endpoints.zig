@@ -1,4 +1,5 @@
 const std = @import("std");
+const adt = @import("../../adt.zig");
 const crypto = @import("../crypto.zig");
 
 const Allocator = std.mem.Allocator;
@@ -7,29 +8,19 @@ const Identity = crypto.Identity;
 const Interface = @import("../Interface.zig");
 const Ratchet = Identity.Ratchet;
 const PublicKeys = Identity.PublicKeys;
+const StringMap = adt.StringMap;
 const Hash = crypto.Hash;
 const Rng = @import("../System.zig").Rng;
 
 const Self = @This();
 
 const Entry = struct {
-    // timestamp: i64,
-    // expiry_time: i64,
     endpoint: Endpoint,
-    // hops: u8,
-    // origin: Hash,
-    // origin_interface: Interface.Id,
-    // packet_hash: Hash,
-    // public_keys: PublicKeys,
-    // ratchet: Ratchet,
-    // noise: ...,
-    // origin_announce: ...,
-    // application_data: []const u8,
 };
 
 ally: Allocator,
 main: Endpoint,
-entries: std.StringArrayHashMap(Entry),
+entries: StringMap(Entry),
 
 pub fn init(ally: Allocator, main: *const Endpoint) !Self {
     var self = Self{
@@ -54,7 +45,7 @@ pub fn has(self: *Self, hash: *const Hash.Short) bool {
     return self.get(hash) != null;
 }
 
-pub fn get(self: *Self, hash: *const Hash.Short) ?*const Endpoint {
+pub fn getPtr(self: *Self, hash: *const Hash.Short) ?*const Endpoint {
     if (self.entries.getPtr(hash[0..])) |entry| {
         return &entry.endpoint;
     }
@@ -98,6 +89,6 @@ test "main" {
     var store = try Self.init(ally, &main_endpoint);
     defer store.deinit();
 
-    const retrieved = store.get(main_endpoint.hash.short()) orelse return error.TestUnexpectedResult;
+    const retrieved = store.getPtr(main_endpoint.hash.short()) orelse return error.TestUnexpectedResult;
     try t.expectEqualSlices(u8, &main_endpoint.hash.bytes, &retrieved.hash.bytes);
 }

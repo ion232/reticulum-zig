@@ -5,10 +5,16 @@ const packet = @import("../packet.zig");
 
 const Allocator = std.mem.Allocator;
 const Header = packet.Header;
+const Interface = @import("../Interface.zig");
 const Context = packet.Context;
 const Endpoints = packet.Endpoints;
 const Payload = packet.Payload;
 const Hash = crypto.Hash;
+
+pub const ValidationError = error{
+    InvalidAnnounce,
+    MismatchedHashes,
+};
 
 const Self = @This();
 
@@ -18,6 +24,7 @@ interface_access_code: data.Bytes,
 endpoints: Endpoints,
 context: Context,
 payload: Payload,
+interface_id: ?Interface.Id,
 
 pub fn init(ally: Allocator) Self {
     return Self{
@@ -27,6 +34,7 @@ pub fn init(ally: Allocator) Self {
         .endpoints = undefined,
         .context = undefined,
         .payload = .none,
+        .interface_id = null,
     };
 }
 
@@ -41,6 +49,10 @@ pub fn setTransport(self: *Self, transport_id: *const Hash.Short) !void {
 }
 
 pub fn validate(self: *const Self) !void {
+    if (self.header.purpose == .announce and self.header.endpoint != .single) {
+        return ValidationError.InvalidAnnounce;
+    }
+
     switch (self.payload) {
         .announce => |a| {
             var signed_data = std.ArrayList(u8).empty;
@@ -75,7 +87,7 @@ pub fn validate(self: *const Self) !void {
 
             const hashes_match = std.mem.eql(u8, endpoint_hash[0..], expected_hash.short()[0..]);
             if (!hashes_match) {
-                return error.MismatchedHashes;
+                return ValidationError.MismatchedHashes;
             }
         },
         else => return,

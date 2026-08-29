@@ -1,5 +1,4 @@
 const std = @import("std");
-const data = @import("../data.zig");
 const errors = std.crypto.errors;
 
 const X25519 = std.crypto.dh.X25519;
@@ -7,8 +6,10 @@ const Ed25519 = std.crypto.sign.Ed25519;
 const Hash = @import("Hash.zig");
 const Rng = @import("../System.zig").Rng;
 
-const X25519PublicKey = [X25519.public_length]u8;
-const X25519SecretKey = [X25519.secret_length]u8;
+pub const X25519PublicKey = [X25519.public_length]u8;
+pub const X25519SecretKey = [X25519.secret_length]u8;
+pub const Ed25519PublicKey = [Ed25519.PublicKey.encoded_length]u8;
+pub const Ed25519SecretKey = [Ed25519.SecretKey.encoded_length]u8;
 
 const Self = @This();
 
